@@ -12,6 +12,7 @@
         "php": "^8.4",
         "driftingly/rector-laravel": "^2.1",
         "laravel/framework": "^12.0",
+        "laravel/passport": "^13.0",
         "laravel/tinker": "^2.10.1"
     },
     "require-dev": {
