@@ -1,0 +1,52 @@
+version: "3.8"
+
+services:
+  laravel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: laravel_app
+    restart: unless-stopped
+    volumes:
+      - .:/var/www/html # Sync local code with the container (remove in production)
+      - /var/www/html/vendor # Keep vendor folder inside the container
+    environment:
+      # Pass Laravel environment variables directly
+      APP_ENV: production
+      APP_DEBUG: false
+      APP_KEY: ${APP_KEY} # Set this in your .env file
+      DB_CONNECTION: mysql
+      DB_HOST: database # This must match the service name of your database
+      DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE} # Set in .env
+      DB_USERNAME: ${DB_USERNAME} # Set in .env
+      DB_PASSWORD: ${DB_PASSWORD} # Set in .env
+    ports:
+      - "8000:9000" # Map host port 8000 to container port 9000
+    depends_on:
+      - database
+    networks:
+      - laravel-network
+
+  database:
+    image: mysql:8.0
+    container_name: laravel_db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "3306:3306" # Map host port 3306 to container port 3306 (optional)
+    volumes:
+      - db_data:/var/lib/mysql # Persist database data
+    networks:
+      - laravel-network
+
+volumes:
+  db_data:
+
+networks:
+  laravel-network:
+    driver: bridge
