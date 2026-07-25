@@ -2,6 +2,9 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasPermissions;
+use App\Models\Concerns\HasRoles;
+use Carbon\CarbonImmutable;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -17,6 +20,9 @@ use Laravel\Sanctum\HasApiTokens;
  * @property-read string $name
  * @property-read string $email
  * @property-read string $password
+ * @property-read null|CarbonImmutable $email_verified_at
+ * @property-read null|CarbonImmutable $created_at
+ * @property-read null|CarbonImmutable $updated_at
  */
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
@@ -24,7 +30,7 @@ class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
 
-    use HasFactory, Notifiable, HasApiTokens;
+    use HasFactory, Notifiable, HasApiTokens, HasPermissions, HasRoles;
 
 
     /**
