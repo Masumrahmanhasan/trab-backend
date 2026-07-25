@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Models\User;
 use App\Traits\ApiResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
@@ -50,5 +51,11 @@ class LoginController extends Controller
 
             throw ValidationException::withMessages(['email' => "Too many login attempts. Please try again in $seconds seconds."]);
         }
+    }
+
+    public function logout(Request $request)
+    {
+        $request->user()->currentAccessToken()?->delete();
+        return $this->ok('You have been successfully logged out!');
     }
 }

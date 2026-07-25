@@ -47,7 +47,7 @@ trait HasRoles
     {
         return $role instanceof Role
             ? $role
-            : Role::where('key', $role)->firstOrFail();
+            : Role::query()->where('key', $role)->firstOrFail();
     }
 
     public function removeRole(string|Role $role): static
