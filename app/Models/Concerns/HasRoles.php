@@ -5,6 +5,7 @@ namespace App\Models\Concerns;
 use App\Models\Role;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
+use Illuminate\Support\Collection as SupportCollection;
 
 /**
  * @property-read Collection<int, Role> $roles
@@ -53,6 +54,14 @@ trait HasRoles
     {
         $this->roles()->detach(
             $this->resolveRole($role)
+        );
+        return $this;
+    }
+
+    public function syncRoles(array|SupportCollection $roles): static
+    {
+        $this->roles()->sync(
+            collect($roles)->map(fn($role) => $this->resolveRole($role)->id)
         );
         return $this;
     }

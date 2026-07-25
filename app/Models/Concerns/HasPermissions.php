@@ -6,6 +6,7 @@ use App\Models\Permission;
 use App\Models\Role;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
+use Illuminate\Support\Collection as SupportCollection;
 use function collect;
 
 /**
@@ -39,6 +40,14 @@ trait HasPermissions
         return $permission instanceof Permission
             ? $permission
             : Permission::where('key', $permission)->firstOrFail();
+    }
+
+    public function syncPermissions(array|SupportCollection $permissions): static
+    {
+        $this->permissions()->sync(
+            collect($permissions)->map(fn($permission) => $this->resolvePermission($permission)->id)
+        );
+        return $this;
     }
 
     public function revokePermissionTo(string|Permission $permission): static
