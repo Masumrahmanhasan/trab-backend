@@ -29,8 +29,8 @@ class PermissionsTableSeeder extends Seeder
 
         foreach (config('permissions.extra') as $key => $extraPermission) {
             $permissions[] = [
-                'name' => $key,
-                'key' => $extraPermission,
+                'name' => $extraPermission,
+                'key' => $key,
                 'created_at' => $now,
             ];
         }

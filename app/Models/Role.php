@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\HasPermissions;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 
 /**
@@ -16,6 +17,11 @@ use Illuminate\Database\Eloquent\Relations\MorphToMany;
 class Role extends Model
 {
     use HasPermissions;
+
+    public function permissions(): BelongsToMany
+    {
+        return $this->belongsToMany(Permission::class, 'role_has_permissions');
+    }
 
     public function users(): MorphToMany
     {
