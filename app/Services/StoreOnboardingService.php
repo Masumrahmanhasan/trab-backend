@@ -2,20 +2,27 @@
 
 namespace App\Services;
 
-use App\Models\Feature;
-use App\Models\Permission;
 use App\Models\Store;
 use App\Models\User;
+use App\Services\Contracts\StoreOnboardingServiceInterface;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
-class StoreOnboardingService
+class StoreOnboardingService implements StoreOnboardingServiceInterface
 {
     /**
      * Assign plan features as permissions to store owner
      */
     public function assignPlanPermissionsToOwner(Store $store): void
     {
-        if (!$store->plan || !$store->owner) {
+        if (! $store->plan || ! $store->owner) {
+            Log::warning('Cannot assign permissions: store has no plan or owner', [
+                'store_id' => $store->id,
+                'plan_id' => $store->plan_id,
+                'owner_id' => $store->owner_id,
+            ]);
+
             return;
         }
 
@@ -29,6 +36,12 @@ class StoreOnboardingService
             foreach ($permissions as $permission) {
                 $store->owner->assignPermissionTo($permission, $store->id);
             }
+
+            Log::info('Permissions assigned to store owner', [
+                'store_id' => $store->id,
+                'owner_id' => $store->owner_id,
+                'permissions_count' => $permissions->count(),
+            ]);
         });
     }
 
@@ -49,6 +62,12 @@ class StoreOnboardingService
             // Assign plan permissions to owner
             $this->assignPlanPermissionsToOwner($store);
 
+            Log::info('Store created with plan', [
+                'store_id' => $store->id,
+                'owner_id' => $owner->id,
+                'plan_id' => $planId,
+            ]);
+
             return $store;
         });
     }
@@ -59,15 +78,22 @@ class StoreOnboardingService
     public function updateStorePlan(Store $store, int $newPlanId): void
     {
         DB::transaction(function () use ($store, $newPlanId) {
+            $oldPlanId = $store->plan_id;
             $store->update(['plan_id' => $newPlanId]);
             $this->assignPlanPermissionsToOwner($store);
+
+            Log::info('Store plan updated', [
+                'store_id' => $store->id,
+                'old_plan_id' => $oldPlanId,
+                'new_plan_id' => $newPlanId,
+            ]);
         });
     }
 
     /**
      * Get available permissions for store owner based on plan
      */
-    public function getOwnerAvailablePermissions(Store $store): \Illuminate\Support\Collection
+    public function getOwnerAvailablePermissions(Store $store): Collection
     {
         return $store->getAvailablePermissions();
     }
@@ -88,7 +114,7 @@ class StoreOnboardingService
         $availablePermissions = $store->getAvailablePermissions()->pluck('key')->toArray();
 
         foreach ($permissionKeys as $permissionKey) {
-            if (!in_array($permissionKey, $availablePermissions)) {
+            if (! in_array($permissionKey, $availablePermissions)) {
                 throw new \InvalidArgumentException("Permission '{$permissionKey}' is not available in your plan");
             }
         }

@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Api\V1\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
-use App\Models\User;
+use App\Http\Resources\Auth\LoginResource;
+use App\Services\Contracts\AuthenticationServiceInterface;
 use App\Traits\ApiResponse;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -15,14 +17,22 @@ class LoginController extends Controller
 {
     use ApiResponse;
 
-    public function login(LoginRequest $request)
+    protected AuthenticationServiceInterface $authService;
+
+    public function __construct(AuthenticationServiceInterface $authService)
     {
-        $request->validated($request->all());
+        $this->authService = $authService;
+    }
+
+    public function login(LoginRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
         $key = $this->throttleKey($request);
         $this->checkRateLimit($key);
 
-        $user = User::query()->where('email', $request->validated(['email']))->first();
-        if (!$user || !Hash::check($request->validated(['password']), $user->password)) {
+        $user = $this->authService->authenticate($validated['email'], $validated['password']);
+
+        if (! $user) {
             RateLimiter::hit($key);
             throw ValidationException::withMessages([
                 'email' => __('auth.failed'),
@@ -31,24 +41,25 @@ class LoginController extends Controller
 
         RateLimiter::clear($key);
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $token = $this->authService->generateToken($user, 'auth_token');
 
-        return $this->ok('Authenticated', [
+        return $this->ok('Authenticated', new LoginResource([
             'token' => $token,
-        ]);
+            'user' => $user,
+        ]));
     }
 
-    protected function throttleKey($request)
+    protected function throttleKey(Request $request): string
     {
         return Str::lower($request->input('email')).'|'.$request->ip();
     }
 
-    protected function checkRateLimit($key)
+    protected function checkRateLimit(string $key): void
     {
         if (RateLimiter::tooManyAttempts($key, 5)) {
             $seconds = RateLimiter::availableIn($key);
 
-            throw ValidationException::withMessages(['email' => "Too many login attempts. Please try again in $seconds seconds."]);
+            throw ValidationException::withMessages(['email' => "Too many login attempts. Please try again in {$seconds} seconds."]);
         }
     }
 }

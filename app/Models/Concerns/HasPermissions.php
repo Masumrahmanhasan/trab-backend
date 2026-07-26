@@ -7,7 +7,6 @@ use App\Models\Role;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Support\Collection as SupportCollection;
-use function collect;
 
 /**
  * @property-read Collection<int, Permission> $permissions
@@ -22,7 +21,7 @@ trait HasPermissions
         $teamId = $teamId ?? $this->getTeamId();
 
         $this->permissions()->syncWithoutDetaching([
-            $this->resolvePermission($permission)->id => ['team_id' => $teamId]
+            $this->resolvePermission($permission)->id => ['team_id' => $teamId],
         ]);
 
         return $this;
@@ -41,9 +40,14 @@ trait HasPermissions
 
     public function resolvePermission(string|Permission $permission): Permission
     {
-        return $permission instanceof Permission
-            ? $permission
-            : Permission::where('key', $permission)->firstOrFail();
+        if ($permission instanceof Permission) {
+            return $permission;
+        }
+
+        // Try to find by ID first, then by key
+        return Permission::where('id', $permission)
+            ->orWhere('key', $permission)
+            ->firstOrFail();
     }
 
     public function syncPermissions(array|SupportCollection $permissions, ?int $teamId = null): static
@@ -56,6 +60,7 @@ trait HasPermissions
                 if ($teamId !== null) {
                     $pivotData['team_id'] = $teamId;
                 }
+
                 return [$this->resolvePermission($permission)->id => $pivotData];
             });
 
@@ -81,7 +86,7 @@ trait HasPermissions
 
     public function hasAnyPermissions(array $permissions, ?int $teamId = null): bool
     {
-        return collect($permissions)->some(fn($permission) => $this->hasPermissionTo($permission, $teamId));
+        return collect($permissions)->some(fn ($permission) => $this->hasPermissionTo($permission, $teamId));
     }
 
     public function hasPermissionTo(string|Permission $permission, ?int $teamId = null): bool

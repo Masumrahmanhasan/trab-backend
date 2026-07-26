@@ -29,7 +29,7 @@ class SetTeamContext
 
         // Set team_id on authenticated user if found
         if ($teamId && $request->user()) {
-            $request->user()->setTeamId((int) $teamId);
+            $request->user()->withTeamId((int) $teamId);
         }
 
         return $next($request);

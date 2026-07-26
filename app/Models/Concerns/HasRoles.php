@@ -16,7 +16,7 @@ trait HasRoles
 
     public function hasAnyRole(array $roles, ?int $teamId = null): bool
     {
-        return collect($roles)->some(fn($role) => $this->hasRole($role, $teamId));
+        return collect($roles)->some(fn ($role) => $this->hasRole($role, $teamId));
     }
 
     public function hasRole(string|Role $role, ?int $teamId = null): bool
@@ -49,7 +49,7 @@ trait HasRoles
         $teamId = $teamId ?? $this->getTeamId();
 
         $this->roles()->syncWithoutDetaching([
-            $this->resolveRole($role)->id => ['team_id' => $teamId]
+            $this->resolveRole($role)->id => ['team_id' => $teamId],
         ]);
 
         return $this;
@@ -57,9 +57,14 @@ trait HasRoles
 
     public function resolveRole(string|Role $role): Role
     {
-        return $role instanceof Role
-            ? $role
-            : Role::where('key', $role)->firstOrFail();
+        if ($role instanceof Role) {
+            return $role;
+        }
+
+        // Try to find by ID first, then by key
+        return Role::where('id', $role)
+            ->orWhere('key', $role)
+            ->firstOrFail();
     }
 
     public function removeRole(string|Role $role, ?int $teamId = null): static

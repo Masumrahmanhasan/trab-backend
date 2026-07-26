@@ -6,9 +6,10 @@ trait HasTeamContext
 {
     protected ?int $teamId = null;
 
-    public function setTeamId(?int $teamId): static
+    public function withTeamId(?int $teamId): static
     {
         $this->teamId = $teamId;
+
         return $this;
     }
 
@@ -20,6 +21,7 @@ trait HasTeamContext
     public function clearTeamId(): static
     {
         $this->teamId = null;
+
         return $this;
     }
 }

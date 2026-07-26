@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Permission;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Seeder;
+
 use function ucfirst;
 
 class PermissionsTableSeeder extends Seeder
@@ -20,7 +21,7 @@ class PermissionsTableSeeder extends Seeder
             foreach ($actions as $action) {
                 $permissions[] = [
                     'name' => ucfirst($action).' '.ucfirst($resource),
-                    'key' => "$action"."-"."$resource",
+                    'key' => "$action".'-'."$resource",
                     'created_at' => $now,
                     'updated_at' => $now,
                 ];

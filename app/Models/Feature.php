@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
@@ -13,6 +14,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  * @property-read string|null $description
  * @property-read string $permission_key
  * @property-read bool $is_active
+ *
+ * @method static active()
  */
 #[Fillable(['name', 'key', 'description', 'permission_key', 'is_active'])]
 class Feature extends Model
@@ -22,8 +25,16 @@ class Feature extends Model
         return $this->belongsToMany(Plan::class, 'plan_feature');
     }
 
-    public function getPermission()
+    public function getPermission(): ?Permission
     {
         return Permission::where('key', $this->permission_key)->first();
+    }
+
+    /**
+     * Scope a query to only include active features.
+     */
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where('is_active', true);
     }
 }

@@ -3,8 +3,8 @@
 namespace Database\Seeders;
 
 use App\Models\Feature;
+use App\Models\Permission;
 use App\Models\Plan;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
@@ -16,7 +16,7 @@ class PlanFeatureSeeder extends Seeder
     public function run(): void
     {
         DB::transaction(function () {
-            // Create features
+            // Create features and ensure permissions exist
             $features = [
                 [
                     'name' => 'Product Management',
@@ -92,6 +92,15 @@ class PlanFeatureSeeder extends Seeder
 
             $createdFeatures = collect();
             foreach ($features as $feature) {
+                // Ensure permission exists
+                Permission::firstOrCreate(
+                    ['key' => $feature['permission_key']],
+                    [
+                        'name' => ucfirst(str_replace('-', ' ', $feature['permission_key'])),
+                        'key' => $feature['permission_key'],
+                    ]
+                );
+
                 $createdFeatures->push(Feature::updateOrCreate(
                     ['key' => $feature['key']],
                     $feature
@@ -110,6 +119,8 @@ class PlanFeatureSeeder extends Seeder
                     'is_active' => true,
                     'max_stores' => 1,
                     'max_staff_per_store' => 5,
+                    'trial_days' => 14,
+                    'is_default' => true,
                 ]
             );
 
@@ -124,6 +135,8 @@ class PlanFeatureSeeder extends Seeder
                     'is_active' => true,
                     'max_stores' => 3,
                     'max_staff_per_store' => 25,
+                    'trial_days' => 14,
+                    'is_default' => false,
                 ]
             );
 
@@ -138,6 +151,8 @@ class PlanFeatureSeeder extends Seeder
                     'is_active' => true,
                     'max_stores' => 10,
                     'max_staff_per_store' => 100,
+                    'trial_days' => 30,
+                    'is_default' => false,
                 ]
             );
 
