@@ -15,11 +15,13 @@ use function collect;
  */
 trait HasPermissions
 {
-    public function assignPermissionTo(string|Permission $permission): static
+    public function assignPermissionTo(string|Permission $permission, ?int $teamId = null): static
     {
-        $this->permissions()->syncWithoutDetaching(
-            $this->resolvePermission($permission)
-        );
+        $teamId = $teamId ?? $this->getTeamId();
+
+        $this->permissions()->syncWithoutDetaching([
+            $this->resolvePermission($permission)->id => ['team_id' => $teamId]
+        ]);
 
         return $this;
     }
@@ -32,7 +34,7 @@ trait HasPermissions
             'model_has_permissions',
             'model_id',
             'permission_id',
-        );
+        )->withPivot('team_id');
     }
 
     public function resolvePermission(string|Permission $permission): Permission
@@ -42,42 +44,79 @@ trait HasPermissions
             : Permission::where('key', $permission)->firstOrFail();
     }
 
-    public function syncPermissions(array|SupportCollection $permissions): static
+    public function syncPermissions(array|SupportCollection $permissions, ?int $teamId = null): static
     {
-        $this->permissions()->sync(
-            collect($permissions)->map(fn($permission) => $this->resolvePermission($permission)->id)
-        );
+        $teamId = $teamId ?? $this->getTeamId();
+
+        $syncData = collect($permissions)->mapWithKeys(function ($permission) use ($teamId) {
+            return [$this->resolvePermission($permission)->id => ['team_id' => $teamId]];
+        });
+
+        $this->permissions()->sync($syncData);
+
         return $this;
     }
 
-    public function revokePermissionTo(string|Permission $permission): static
+    public function revokePermissionTo(string|Permission $permission, ?int $teamId = null): static
     {
-        $this->permissions()->detach(
-            $this->resolvePermission($permission)
-        );
+        $teamId = $teamId ?? $this->getTeamId();
+
+        $query = $this->permissions()->where($this->resolvePermission($permission)->getKeyName(), $this->resolvePermission($permission)->id);
+
+        if ($teamId !== null) {
+            $query->wherePivot('team_id', $teamId);
+        }
+
+        $query->detach();
+
         return $this;
     }
 
-    public function hasAnyPermissions(array $permissions): bool
+    public function hasAnyPermissions(array $permissions, ?int $teamId = null): bool
     {
-        return collect($permissions)->some(fn($permission) => $this->hasPermissionTo($permission));
+        return collect($permissions)->some(fn($permission) => $this->hasPermissionTo($permission, $teamId));
     }
 
-    public function hasPermissionTo(string|Permission $permission): bool
+    public function hasPermissionTo(string|Permission $permission, ?int $teamId = null): bool
     {
         $key = $permission instanceof Permission ? $permission->key : $permission;
+        $teamId = $teamId ?? $this->getTeamId();
 
-        if ($this->permissions->contains('key', $key)) {
+        $permissionsQuery = $this->permissions();
+
+        if ($teamId !== null) {
+            $permissionsQuery->wherePivot('team_id', $teamId);
+        }
+
+        if ($permissionsQuery->get()->contains('key', $key)) {
             return true;
         }
 
         if (method_exists($this, 'roles')) {
-            return $this->roles->loadMissing('permissions')
+            $rolesQuery = $this->roles();
+
+            if ($teamId !== null) {
+                $rolesQuery->wherePivot('team_id', $teamId);
+            }
+
+            return $rolesQuery->with('permissions')
+                ->get()
                 ->pluck('permissions')
                 ->flatten()
                 ->contains('key', $key);
         }
 
         return false;
+    }
+
+    public function permissionsInTeam(?int $teamId = null): Collection
+    {
+        $teamId = $teamId ?? $this->getTeamId();
+
+        if ($teamId === null) {
+            return $this->permissions;
+        }
+
+        return $this->permissions()->wherePivot('team_id', $teamId)->get();
     }
 }

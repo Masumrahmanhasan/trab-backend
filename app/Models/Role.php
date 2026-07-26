@@ -31,6 +31,11 @@ class Role extends Model
             'model_has_roles',
             'role_id',
             'model_id',
-        );
+        )->withPivot('team_id');
+    }
+
+    public function usersInTeam(int $teamId): MorphToMany
+    {
+        return $this->users()->wherePivot('team_id', $teamId);
     }
 }
