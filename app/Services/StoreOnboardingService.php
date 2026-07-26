@@ -79,4 +79,18 @@ class StoreOnboardingService
     {
         return $store->getAvailablePermissions()->contains('key', $permissionKey);
     }
+
+    /**
+     * Validate if all permissions are available to store owner
+     */
+    public function validatePermissionsForStore(Store $store, array $permissionKeys): void
+    {
+        $availablePermissions = $store->getAvailablePermissions()->pluck('key')->toArray();
+
+        foreach ($permissionKeys as $permissionKey) {
+            if (!in_array($permissionKey, $availablePermissions)) {
+                throw new \InvalidArgumentException("Permission '{$permissionKey}' is not available in your plan");
+            }
+        }
+    }
 }

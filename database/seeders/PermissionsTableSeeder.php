@@ -20,7 +20,7 @@ class PermissionsTableSeeder extends Seeder
             foreach ($actions as $action) {
                 $permissions[] = [
                     'name' => ucfirst($action).' '.ucfirst($resource),
-                    'key' => "$action"."."."$resource",
+                    'key' => "$action"."-"."$resource",
                     'created_at' => $now,
                     'updated_at' => $now,
                 ];

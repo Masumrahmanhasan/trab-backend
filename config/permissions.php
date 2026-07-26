@@ -7,9 +7,9 @@ return [
     ],
 
     'extra' => [
-        'roles.assign' => 'Assign Role',
-        'permissions.assign' => 'Assign Permission',
-        'roles.revoke' => 'Revoke Role',
-        'permissions.revoke' => 'Revoke Permission',
+        'roles-assign' => 'Assign Role',
+        'permissions-assign' => 'Assign Permission',
+        'roles-revoke' => 'Revoke Role',
+        'permissions-revoke' => 'Revoke Permission',
     ]
 ];

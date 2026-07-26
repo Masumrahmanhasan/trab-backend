@@ -15,6 +15,8 @@ use function collect;
  */
 trait HasPermissions
 {
+    use HasTeamContext;
+
     public function assignPermissionTo(string|Permission $permission, ?int $teamId = null): static
     {
         $teamId = $teamId ?? $this->getTeamId();
@@ -48,9 +50,14 @@ trait HasPermissions
     {
         $teamId = $teamId ?? $this->getTeamId();
 
-        $syncData = collect($permissions)->mapWithKeys(function ($permission) use ($teamId) {
-            return [$this->resolvePermission($permission)->id => ['team_id' => $teamId]];
-        });
+        $syncData = collect($permissions)
+            ->mapWithKeys(function ($permission) use ($teamId) {
+                $pivotData = [];
+                if ($teamId !== null) {
+                    $pivotData['team_id'] = $teamId;
+                }
+                return [$this->resolvePermission($permission)->id => $pivotData];
+            });
 
         $this->permissions()->sync($syncData);
 

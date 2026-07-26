@@ -18,8 +18,8 @@ class RolesTableSeeder extends Seeder
     {
         DB::transaction(function () {
             $superAdmin = Role::query()->create([
-                'name' => 'super-admin',
-                'key' => 'superadmin'
+                'name' => 'Super Admin',
+                'key' => 'super-admin'
             ]);
 
             $superAdmin->syncPermissions(Permission::all());
