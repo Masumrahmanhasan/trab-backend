@@ -11,6 +11,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
+use Throwable;
+use function __;
+use function config;
 
 class RegistrationController extends Controller
 {
@@ -23,6 +26,9 @@ class RegistrationController extends Controller
         $this->authService = $authService;
     }
 
+    /**
+     * @throws Throwable
+     */
     public function register(RegisterRequest $request): JsonResponse
     {
         $validated = $request->validated();
@@ -33,7 +39,6 @@ class RegistrationController extends Controller
 
         RateLimiter::clear($key);
         $token = $this->authService->generateToken($user, config('app.name').'-token');
-
         return $this->ok(__('messages.login'), new LoginResource([
             'token' => $token,
             'user' => $user,

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -29,11 +30,13 @@ use Illuminate\Support\Carbon;
  * @property-read Plan $plan
  * @property-read Store $store
  *
- * @method static current()
- * @method static active()
- * @method static cancelled()
- * @method static expired()
- * @method static trialing()
+ * @method static Builder|Subscription current()
+ * @method static Builder|Subscription active()
+ * @method static Builder|Subscription cancelled()
+ * @method static Builder|Subscription expired()
+ * @method static Builder|Subscription trialing()
+ * @method static Builder|Subscription forUser(int $userId)
+ * @method static Builder|Subscription forStore(int $storeId)
  */
 #[Fillable(['user_id', 'plan_id', 'store_id', 'status', 'starts_at', 'ends_at', 'trial_ends_at', 'cancelled_at', 'payment_method', 'payment_gateway_id', 'metadata',])]
 class Subscription extends Model
@@ -64,20 +67,21 @@ class Subscription extends Model
         return $this->belongsTo(Store::class);
     }
 
-    public function scopeCurrent(Builder $query): Builder
+    public function isCurrent(): bool
     {
-        return $query->where(function ($query) {
-            $query->active()->orWhere(function ($query) {
-                $query->where('status', 'trialing')
-                    ->where('trial_ends_at', '>', now());
-            });
-        });
+        return $this->isActive() || $this->isOnTrial();
     }
 
-    /**
-     * Scope a query to only include active subscriptions.
-     */
-    public function scopeActive(Builder $query): Builder
+    public function isActive(): bool
+    {
+        return $this->active() &&
+            $this->starts_at &&
+            $this->starts_at->isPast() &&
+            ($this->ends_at === null || $this->ends_at->isFuture());
+    }
+
+    #[Scope('active')]
+    protected function active(Builder $query): Builder
     {
         return $query->where('status', 'active')
             ->where('starts_at', '<=', now())
@@ -87,18 +91,25 @@ class Subscription extends Model
             });
     }
 
-    /**
-     * Scope a query to only include cancelled subscriptions.
-     */
-    public function scopeCancelled(Builder $query): Builder
+    public function isOnTrial(): bool
     {
-        return $query->where('status', 'cancelled');
+        return $this->status === 'trialing' &&
+            $this->trial_ends_at &&
+            $this->trial_ends_at->isFuture();
     }
 
-    /**
-     * Scope a query to only include expired subscriptions.
-     */
-    public function scopeExpired(Builder $query): Builder
+    public function isCancelled(): bool
+    {
+        return $this->status === 'cancelled';
+    }
+
+    public function isExpired(): bool
+    {
+        return $this->expired() || ($this->ends_at && $this->ends_at->isPast());
+    }
+
+    #[Scope]
+    protected function expired(Builder $query): Builder
     {
         return $query->where('status', 'expired')
             ->orWhere(function ($query) {
@@ -107,77 +118,6 @@ class Subscription extends Model
             });
     }
 
-    /**
-     * Scope a query to only include trialing subscriptions.
-     */
-    public function scopeTrialing(Builder $query): Builder
-    {
-        return $query->where('status', 'trialing')
-            ->where('trial_ends_at', '>', now());
-    }
-
-    /**
-     * Scope a query to only include subscriptions for a specific user.
-     */
-    public function scopeForUser(Builder $query, int $userId): Builder
-    {
-        return $query->where('user_id', $userId);
-    }
-
-    /**
-     * Scope a query to only include subscriptions for a specific store.
-     */
-    public function scopeForStore(Builder $query, int $storeId): Builder
-    {
-        return $query->where('store_id', $storeId);
-    }
-
-    public function isCurrent()
-    {
-        return $this->isActive() || $this->isOnTrial();
-    }
-
-    /**
-     * Check if subscription is active.
-     */
-    public function isActive(): bool
-    {
-        return $this->status === 'active' &&
-            $this->starts_at &&
-            $this->starts_at->isPast() &&
-            ($this->ends_at === null || $this->ends_at->isFuture());
-    }
-
-    /**
-     * Check if subscription is on trial.
-     */
-    public function isOnTrial(): bool
-    {
-        return $this->status === 'trialing' &&
-            $this->trial_ends_at &&
-            $this->trial_ends_at->isFuture();
-    }
-
-    /**
-     * Check if subscription is cancelled.
-     */
-    public function isCancelled(): bool
-    {
-        return $this->status === 'cancelled';
-    }
-
-    /**
-     * Check if subscription is expired.
-     */
-    public function isExpired(): bool
-    {
-        return $this->status === 'expired' ||
-            ($this->ends_at && $this->ends_at->isPast());
-    }
-
-    /**
-     * Cancel the subscription.
-     */
     public function cancel(): void
     {
         $this->update([
@@ -186,9 +126,6 @@ class Subscription extends Model
         ]);
     }
 
-    /**
-     * Resume the subscription.
-     */
     public function resume(): void
     {
         $this->update([
@@ -197,9 +134,42 @@ class Subscription extends Model
         ]);
     }
 
-    /**
-     * The attributes that should be cast.
-     */
+    #[Scope]
+    protected function forStore(Builder $query, int $storeId): Builder
+    {
+        return $query->where('store_id', $storeId);
+    }
+
+    #[Scope]
+    protected function cancelled(Builder $query): Builder
+    {
+        return $query->where('status', 'cancelled');
+    }
+
+    #[Scope]
+    protected function trialing(Builder $query): Builder
+    {
+        return $query->where('status', 'trialing')
+            ->where('trial_ends_at', '>', now());
+    }
+
+    #[Scope]
+    protected function forUser(Builder $query, int $userId): Builder
+    {
+        return $query->where('user_id', $userId);
+    }
+
+    #[Scope]
+    protected function current(Builder $query): Builder
+    {
+        return $query->where(function ($query) {
+            $query->active()->orWhere(function ($query) {
+                $query->where('status', 'trialing')
+                    ->where('trial_ends_at', '>', now());
+            });
+        });
+    }
+
     protected function casts(): array
     {
         return [

@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 use RuntimeException;
+use Throwable;
 
 class SubscriptionService implements SubscriptionServiceInterface
 {
@@ -41,6 +42,7 @@ class SubscriptionService implements SubscriptionServiceInterface
 
     /**
      * Resume a cancelled subscription.
+     * @throws Throwable
      */
     public function resumeSubscription(Subscription $subscription): Subscription
     {
@@ -154,10 +156,13 @@ class SubscriptionService implements SubscriptionServiceInterface
 
     /**
      * Create a new subscription with automatic setup for new users.
+     * @throws Throwable
      */
     public function createSubscriptionWithAutoSetup(User $user, ?Store $store = null): Subscription
     {
         $defaultPlan = $this->getDefaultPlan();
+
+        Log::info('Default plan', [$defaultPlan]);
 
         if (!$defaultPlan) {
             throw new RuntimeException('No default plan configured');
@@ -174,7 +179,6 @@ class SubscriptionService implements SubscriptionServiceInterface
             ]
         );
 
-        // Assign default role and permissions at user level
         $this->assignDefaultRoleAndPermissions($user, $defaultPlan);
 
         Log::info('Auto subscription created for new user', [
@@ -191,11 +195,12 @@ class SubscriptionService implements SubscriptionServiceInterface
      */
     public function getDefaultPlan(): ?Plan
     {
-        return Plan::default()->first();
+        return Plan::default()->active()->first();
     }
 
     /**
      * Create a new subscription.
+     * @throws Throwable
      */
     public function createSubscription(User $user, Plan $plan, ?Store $store = null, array $data = []): Subscription
     {
@@ -209,7 +214,7 @@ class SubscriptionService implements SubscriptionServiceInterface
         $endsAt = $trialDays > 0 ? null : $this->calculateEndDate($plan, $startDate);
 
         return DB::transaction(function () use ($user, $plan, $store, $data, $startDate, $trialEndsAt, $endsAt) {
-            $subscription = Subscription::create([
+            $subscription = Subscription::query()->create([
                 'user_id' => $user->id,
                 'plan_id' => $plan->id,
                 'store_id' => $store?->id,
@@ -243,18 +248,14 @@ class SubscriptionService implements SubscriptionServiceInterface
      */
     public function canSubscribe(User $user, Plan $plan): bool
     {
-        // Check if plan is active
         if (!$plan->is_active) {
             return false;
         }
 
-        // Check if user already has an active subscription
         if ($this->hasActiveSubscription($user)) {
-            // Allow if it's a plan change, not a new subscription
             return false;
         }
 
-        // Check store limits if plan has max_stores restriction
         if ($plan->max_stores > 0) {
             $currentStoreCount = $user->ownedStores()->count();
             if ($currentStoreCount >= $plan->max_stores) {

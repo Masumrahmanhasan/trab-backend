@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -18,9 +19,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read bool $is_active
  * @property-read int $max_stores
  * @property-read int $max_staff_per_store
+ * @property-read int $trial_days
+ * @property-read bool $is_default
  *
- * @method static active()
- * @method static default()
+ * @method static Builder|Plan default()
+ * @method static Builder|Plan active()
  */
 #[Fillable(['name', 'slug', 'description', 'price', 'billing_cycle', 'is_active', 'max_stores', 'max_staff_per_store', 'trial_days', 'is_default'])]
 class Plan extends Model
@@ -33,6 +36,9 @@ class Plan extends Model
         return 'slug';
     }
 
+    /**
+     * @return BelongsToMany
+     */
     public function features(): BelongsToMany
     {
         return $this->belongsToMany(Feature::class, 'plan_feature');
@@ -48,19 +54,15 @@ class Plan extends Model
         return $this->hasMany(Subscription::class);
     }
 
-    /**
-     * Scope a query to only include active plans.
-     */
-    public function scopeActive(Builder $query): Builder
+    #[Scope]
+    protected function default(Builder $query): void
     {
-        return $query->where('is_active', true);
+        $query->where('is_default', true);
     }
 
-    /**
-     * Scope a query to find the default plan.
-     */
-    public function scopeDefault(Builder $query): Builder
+    #[Scope]
+    protected function active(Builder $query): void
     {
-        return $query->where('is_default', true)->active();
+        $query->where('is_active', true);
     }
 }
