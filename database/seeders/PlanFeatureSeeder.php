@@ -108,7 +108,7 @@ class PlanFeatureSeeder extends Seeder
             }
 
             // Create plans
-            $starterPlan = Plan::updateOrCreate(
+            $starterPlan = Plan::query()->updateOrCreate(
                 ['slug' => 'starter'],
                 [
                     'name' => 'Starter',
@@ -124,7 +124,7 @@ class PlanFeatureSeeder extends Seeder
                 ]
             );
 
-            $professionalPlan = Plan::updateOrCreate(
+            $professionalPlan = Plan::query()->updateOrCreate(
                 ['slug' => 'professional'],
                 [
                     'name' => 'Professional',
@@ -140,7 +140,7 @@ class PlanFeatureSeeder extends Seeder
                 ]
             );
 
-            $enterprisePlan = Plan::updateOrCreate(
+            $enterprisePlan = Plan::query()->updateOrCreate(
                 ['slug' => 'enterprise'],
                 [
                     'name' => 'Enterprise',

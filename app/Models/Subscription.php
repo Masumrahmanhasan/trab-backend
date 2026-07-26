@@ -2,53 +2,43 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property-read int $id
+ * @property-read int $user_id
+ * @property-read int $plan_id
+ * @property-read int $store_id
+ * @property-read string $status
+ * @property-read Carbon|null $starts_at
+ * @property-read Carbon|null $ends_at
+ * @property-read Carbon|null $trial_ends_at
+ * @property-read Carbon|null $cancelled_at
+ * @property-read string|null $payment_method
+ * @property-read string|null $payment_gateway_id
+ * @property-read array|null $metadata
+ * @property-read Carbon|null $created_at
+ * @property-read Carbon|null $updated_at
+ * @property-read Carbon|null $deleted_at
+ * @property-read User $user
+ * @property-read Plan $plan
+ * @property-read Store $store
+ *
+ * @method static current()
+ * @method static active()
+ * @method static cancelled()
+ * @method static expired()
+ * @method static trialing()
+ */
+#[Fillable(['user_id', 'plan_id', 'store_id', 'status', 'starts_at', 'ends_at', 'trial_ends_at', 'cancelled_at', 'payment_method', 'payment_gateway_id', 'metadata',])]
 class Subscription extends Model
 {
     use SoftDeletes;
-
-    /**
-     * The attributes that are mass assignable.
-     */
-    protected $fillable = [
-        'user_id',
-        'plan_id',
-        'store_id',
-        'status',
-        'starts_at',
-        'ends_at',
-        'trial_ends_at',
-        'cancelled_at',
-        'payment_method',
-        'payment_gateway_id',
-        'metadata',
-    ];
-
-    /**
-     * Get the route key for the model.
-     */
-    public function getRouteKeyName(): string
-    {
-        return 'id';
-    }
-
-    /**
-     * The attributes that should be cast.
-     */
-    protected function casts(): array
-    {
-        return [
-            'starts_at' => 'datetime',
-            'ends_at' => 'datetime',
-            'trial_ends_at' => 'datetime',
-            'cancelled_at' => 'datetime',
-            'metadata' => 'array',
-        ];
-    }
 
     /**
      * Get the user that owns the subscription.
@@ -72,6 +62,16 @@ class Subscription extends Model
     public function store(): BelongsTo
     {
         return $this->belongsTo(Store::class);
+    }
+
+    public function scopeCurrent(Builder $query): Builder
+    {
+        return $query->where(function ($query) {
+            $query->active()->orWhere(function ($query) {
+                $query->where('status', 'trialing')
+                    ->where('trial_ends_at', '>', now());
+            });
+        });
     }
 
     /**
@@ -132,6 +132,11 @@ class Subscription extends Model
         return $query->where('store_id', $storeId);
     }
 
+    public function isCurrent()
+    {
+        return $this->isActive() || $this->isOnTrial();
+    }
+
     /**
      * Check if subscription is active.
      */
@@ -144,14 +149,6 @@ class Subscription extends Model
     }
 
     /**
-     * Check if subscription is cancelled.
-     */
-    public function isCancelled(): bool
-    {
-        return $this->status === 'cancelled';
-    }
-
-    /**
      * Check if subscription is on trial.
      */
     public function isOnTrial(): bool
@@ -159,6 +156,14 @@ class Subscription extends Model
         return $this->status === 'trialing' &&
             $this->trial_ends_at &&
             $this->trial_ends_at->isFuture();
+    }
+
+    /**
+     * Check if subscription is cancelled.
+     */
+    public function isCancelled(): bool
+    {
+        return $this->status === 'cancelled';
     }
 
     /**
@@ -190,5 +195,19 @@ class Subscription extends Model
             'status' => 'active',
             'cancelled_at' => null,
         ]);
+    }
+
+    /**
+     * The attributes that should be cast.
+     */
+    protected function casts(): array
+    {
+        return [
+            'starts_at' => 'datetime',
+            'ends_at' => 'datetime',
+            'trial_ends_at' => 'datetime',
+            'cancelled_at' => 'datetime',
+            'metadata' => 'array',
+        ];
     }
 }

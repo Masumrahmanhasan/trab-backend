@@ -21,6 +21,9 @@ use Laravel\Sanctum\HasApiTokens;
  * @property-read string $name
  * @property-read string $email
  * @property-read string $password
+ *
+ * @method static inStore(int $storeId)
+ * @method static withRoleInStore(string|Role $role, int $storeId)
  */
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
@@ -28,19 +31,6 @@ class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, HasPermissions, HasRoles, Notifiable;
-
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
-    protected function casts(): array
-    {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-        ];
-    }
 
     public function ownedStores(): HasMany
     {
@@ -59,12 +49,11 @@ class User extends Authenticatable
 
     public function activeSubscription(): HasOne
     {
-        return $this->hasOne(Subscription::class)->active();
+        return $this->hasOne(Subscription::class)->current();
     }
 
     public function getStores(): Collection
     {
-        // Get all unique team_ids from user's role assignments
         $teamIds = $this->roles()->pluck('team_id')->filter()->unique();
 
         return Store::query()
@@ -94,5 +83,18 @@ class User extends Authenticatable
             $q->where('key', is_string($role) ? $role : $role->key)
                 ->wherePivot('team_id', $storeId);
         });
+    }
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+        ];
     }
 }
