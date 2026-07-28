@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\Store;
+use App\Policies\StorePolicy;
 use App\Services\AuthenticationService;
 use App\Services\Contracts\AuthenticationServiceInterface;
 use App\Services\Contracts\StoreOnboardingServiceInterface;
@@ -28,5 +30,13 @@ class AppServiceProvider extends ServiceProvider
     /**
      * Bootstrap any application services.
      */
-    public function boot(): void {}
+    public function boot(): void
+    {
+        $this->registerPolicies();
+    }
+
+    protected function registerPolicies(): void
+    {
+        \Gate::policy(Store::class, StorePolicy::class);
+    }
 }

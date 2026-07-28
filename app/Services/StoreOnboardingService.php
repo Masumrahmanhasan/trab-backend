@@ -111,12 +111,23 @@ class StoreOnboardingService implements StoreOnboardingServiceInterface
      */
     public function validatePermissionsForStore(Store $store, array $permissionKeys): void
     {
+        if (!$store->plan) {
+            throw new \InvalidArgumentException('Store has no plan assigned');
+        }
+
         $availablePermissions = $store->getAvailablePermissions()->pluck('key')->toArray();
 
+        $invalidPermissions = [];
         foreach ($permissionKeys as $permissionKey) {
             if (! in_array($permissionKey, $availablePermissions)) {
-                throw new \InvalidArgumentException("Permission '{$permissionKey}' is not available in your plan");
+                $invalidPermissions[] = $permissionKey;
             }
+        }
+
+        if (count($invalidPermissions) > 0) {
+            throw new \InvalidArgumentException(
+                'Permissions not available in your plan: ' . implode(', ', $invalidPermissions)
+            );
         }
     }
 }

@@ -13,12 +13,14 @@ use Illuminate\Database\Eloquent\Relations\MorphToMany;
  * @property-read int $id
  * @property-read string $name
  * @property-read string $key
+ * @property-read string $context
  * @property-read null|CarbonImmutable $created_at
  * @property-read null|CarbonImmutable $updated_at
  */
-#[Fillable(['name', 'key'])]
+#[Fillable(['name', 'key', 'context'])]
 class Permission extends Model
 {
+
     /**
      * Get the route key for the model.
      */
@@ -49,5 +51,21 @@ class Permission extends Model
     public function scopeByKey(Builder $query, string $key): Builder
     {
         return $query->where('key', $key);
+    }
+
+    /**
+     * Scope a query to only include super admin permissions.
+     */
+    public function scopeSuperAdmin(Builder $query): Builder
+    {
+        return $query->where('context', 'super_admin');
+    }
+
+    /**
+     * Scope a query to only include store permissions.
+     */
+    public function scopeStore(Builder $query): Builder
+    {
+        return $query->where('context', 'store');
     }
 }

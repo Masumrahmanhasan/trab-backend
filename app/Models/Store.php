@@ -60,7 +60,12 @@ class Store extends Model
         }
 
         return $this->plan->features->map(function ($feature) {
-            return $feature->getPermission();
+            $permission = $feature->getPermission();
+            // Only return store-context permissions
+            if ($permission && $permission->context === 'store') {
+                return $permission;
+            }
+            return null;
         })->filter();
     }
 

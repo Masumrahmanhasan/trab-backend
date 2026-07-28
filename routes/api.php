@@ -24,6 +24,8 @@ Route::prefix('v1')->group(function () {
     // Authentication routes
     Route::post('/auth/login', [LoginController::class, 'login'])->name('auth.login');
     Route::post('/auth/register', [RegistrationController::class, 'register'])->name('auth.register');
+    Route::post('/auth/email/verification-notification', [LoginController::class, 'sendVerificationEmail'])->name('auth.verification.send');
+    Route::get('/auth/email/verify/{id}/{hash}', [LoginController::class, 'verifyEmail'])->name('auth.verification.verify');
 
     // Protected routes
     Route::middleware('auth:sanctum')->group(function () {
@@ -63,6 +65,9 @@ Route::prefix('v1')->group(function () {
             // Store additional routes
             Route::prefix('stores/{store}')->group(function () {
                 Route::get('/staff', [StoreController::class, 'staff'])->name('stores.staff');
+                Route::post('/staff', [StoreController::class, 'assignStaff'])->name('stores.staff.assign');
+                Route::delete('/staff/{staff}', [StoreController::class, 'removeStaff'])->name('stores.staff.remove');
+                Route::put('/staff/{staff}/permissions', [StoreController::class, 'updateStaffPermissions'])->name('stores.staff.permissions.update');
                 Route::get('/permissions', [StoreController::class, 'availablePermissions'])->name('stores.permissions');
                 Route::get('/features', [FeatureController::class, 'storeFeatures'])->name('stores.features');
                 Route::get('/permissions/features', [FeatureController::class, 'storePermissions'])->name('stores.permissions.features');

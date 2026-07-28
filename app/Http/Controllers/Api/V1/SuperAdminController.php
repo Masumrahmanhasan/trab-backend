@@ -182,9 +182,10 @@ class SuperAdminController extends Controller
      */
     public function permissions(): JsonResponse
     {
-        $permissions = Permission::all();
+        // Only return super admin permissions for super admin context
+        $permissions = Permission::superAdmin()->get();
 
-        return $this->ok('Permissions retrieved successfully', PermissionResource::collection($permissions));
+        return $this->ok('Super admin permissions retrieved successfully', PermissionResource::collection($permissions));
     }
 
     /**

@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Auth\Events\Verified;
 
 class LoginController extends Controller
 {
@@ -32,7 +33,7 @@ class LoginController extends Controller
 
         $user = $this->authService->authenticate($validated['email'], $validated['password']);
 
-        if (! $user) {
+        if (!$user) {
             RateLimiter::hit($key);
             throw ValidationException::withMessages([
                 'email' => __('auth.failed'),
@@ -41,17 +42,16 @@ class LoginController extends Controller
 
         RateLimiter::clear($key);
 
-        $token = $this->authService->generateToken($user, 'auth_token');
+        $token = $this->authService->generateToken($user, 'trab_auth_token');
 
         return $this->ok('Authenticated', new LoginResource([
             'token' => $token,
-            'user' => $user,
         ]));
     }
 
     protected function throttleKey(Request $request): string
     {
-        return Str::lower($request->input('email')).'|'.$request->ip();
+        return Str::lower($request->input('email')) . '|' . $request->ip();
     }
 
     protected function checkRateLimit(string $key): void
@@ -61,5 +61,39 @@ class LoginController extends Controller
 
             throw ValidationException::withMessages(['email' => "Too many login attempts. Please try again in {$seconds} seconds."]);
         }
+    }
+
+    public function sendVerificationEmail(Request $request): JsonResponse
+    {
+        if ($request->user()->hasVerifiedEmail()) {
+            return $this->ok('Email already verified');
+        }
+
+        $request->user()->sendEmailVerificationNotification();
+
+        return $this->ok('Verification link sent');
+    }
+
+    public function verifyEmail(Request $request, $id, $hash): JsonResponse
+    {
+        $user = \App\Models\User::find($id);
+
+        if (!$user) {
+            return $this->notFound('User not found');
+        }
+
+        if (!hash_equals(sha1($user->getEmailForVerification()), $hash)) {
+            return $this->forbidden('Invalid verification link');
+        }
+
+        if ($user->hasVerifiedEmail()) {
+            return $this->ok('Email already verified');
+        }
+
+        if ($user->markEmailAsVerified()) {
+            event(new Verified($user));
+        }
+
+        return $this->ok('Email successfully verified');
     }
 }

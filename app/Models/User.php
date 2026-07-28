@@ -15,6 +15,8 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Collection;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Services\ActivityLogger;
 
 /**
  * @property-read int $id
@@ -27,7 +29,7 @@ use Laravel\Sanctum\HasApiTokens;
  */
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, HasPermissions, HasRoles, Notifiable;
@@ -96,5 +98,31 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * Log permission grant activity
+     */
+    protected function logPermissionGrant(string|Permission $permission, ?int $teamId = null): void
+    {
+        $permissionKey = $permission instanceof Permission ? $permission->key : $permission;
+        app(ActivityLogger::class)->logPermissionGrant($this, $permissionKey, $teamId);
+    }
+
+    /**
+     * Log permission revocation activity
+     */
+    protected function logPermissionRevocation(string|Permission $permission, ?int $teamId = null): void
+    {
+        $permissionKey = $permission instanceof Permission ? $permission->key : $permission;
+        app(ActivityLogger::class)->logPermissionRevocation($this, $permissionKey, $teamId);
+    }
+
+    /**
+     * Check if user has active subscription
+     */
+    public function hasActiveSubscription(): bool
+    {
+        return $this->activeSubscription()->exists();
     }
 }

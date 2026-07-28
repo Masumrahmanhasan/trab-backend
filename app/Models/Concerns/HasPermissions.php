@@ -4,9 +4,11 @@ namespace App\Models\Concerns;
 
 use App\Models\Permission;
 use App\Models\Role;
+use App\Services\PermissionCacheService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Support\Collection as SupportCollection;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * @property-read Collection<int, Permission> $permissions
@@ -23,6 +25,14 @@ trait HasPermissions
         $this->permissions()->syncWithoutDetaching([
             $this->resolvePermission($permission)->id => ['team_id' => $teamId],
         ]);
+
+        // Log activity
+        if (method_exists($this, 'logPermissionGrant')) {
+            $this->logPermissionGrant($permission, $teamId);
+        }
+
+        // Clear cache
+        $this->clearPermissionCache($teamId);
 
         return $this;
     }
@@ -66,6 +76,9 @@ trait HasPermissions
 
         $this->permissions()->sync($syncData);
 
+        // Clear cache
+        $this->clearPermissionCache($teamId);
+
         return $this;
     }
 
@@ -80,6 +93,9 @@ trait HasPermissions
         }
 
         $query->detach();
+
+        // Clear cache
+        $this->clearPermissionCache($teamId);
 
         return $this;
     }
@@ -130,5 +146,13 @@ trait HasPermissions
         }
 
         return $this->permissions()->wherePivot('team_id', $teamId)->get();
+    }
+
+    protected function clearPermissionCache(?int $teamId = null): void
+    {
+        if (method_exists($this, 'getKey') && method_exists($this, 'clearTeamId')) {
+            $cacheService = app(PermissionCacheService::class);
+            $cacheService->clearUserPermissions($this->getKey(), $teamId);
+        }
     }
 }

@@ -26,9 +26,10 @@ class RolesTableSeeder extends Seeder
                 ]
             );
 
-            $allPermissions = Permission::all();
-            if ($allPermissions->isNotEmpty()) {
-                $superAdmin->syncPermissions($allPermissions->pluck('id')->toArray());
+            // Super admin gets only super admin permissions
+            $superAdminPermissions = Permission::superAdmin()->get();
+            if ($superAdminPermissions->isNotEmpty()) {
+                $superAdmin->syncPermissions($superAdminPermissions->pluck('id')->toArray());
             }
 
             // Create owner role for store owners
@@ -40,9 +41,27 @@ class RolesTableSeeder extends Seeder
                 ]
             );
 
-            // Owner gets all permissions by default (can be customised per plan)
-            if ($allPermissions->isNotEmpty()) {
-                $owner->syncPermissions($allPermissions->pluck('id')->toArray());
+            // Owner gets store permissions (will be filtered by plan features)
+            $storePermissions = Permission::store()->get();
+            if ($storePermissions->isNotEmpty()) {
+                $owner->syncPermissions($storePermissions->pluck('id')->toArray());
+            }
+
+            // Create staff role for store staff
+            $staff = Role::query()->updateOrCreate(
+                ['key' => 'staff'],
+                [
+                    'name' => 'Staff',
+                    'key' => 'staff',
+                ]
+            );
+
+            // Staff gets limited store permissions (can be customized per staff member)
+            $limitedPermissions = Permission::store()
+                ->whereIn('key', ['view-products', 'view-orders', 'view-customers', 'view-inventory'])
+                ->get();
+            if ($limitedPermissions->isNotEmpty()) {
+                $staff->syncPermissions($limitedPermissions->pluck('id')->toArray());
             }
         });
     }

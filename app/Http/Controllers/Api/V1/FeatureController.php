@@ -85,11 +85,29 @@ class FeatureController extends Controller
             return $this->forbidden('Authentication required');
         }
 
-        $result = $this->featureService->getUserPermissionsWithFeatures($request->user());
+        $user = $request->user();
+
+        // Super admin gets all super admin permissions
+        if ($user->hasRole('super-admin')) {
+            $permissions = \App\Models\Permission::superAdmin()->get();
+            return $this->ok('Super admin permissions retrieved successfully', [
+                'permissions' => $permissions,
+                'context' => 'super_admin',
+            ]);
+        }
+
+        // Store owners get permissions based on their subscription/plan
+        $result = $this->featureService->getUserPermissionsWithFeatures($user);
+
+        // Filter to only store-context permissions
+        $storePermissions = collect($result['permissions'])->filter(function ($permission) {
+            return $permission->context === 'store';
+        });
 
         return $this->ok('User permissions and features retrieved successfully', [
-            'permissions' => $result['permissions'],
+            'permissions' => $storePermissions->values(),
             'features' => FeatureResource::collection($result['features']),
+            'context' => 'store',
         ]);
     }
 
@@ -111,9 +129,15 @@ class FeatureController extends Controller
 
         $result = $this->featureService->getUserPermissionsForStoreWithFeatures($user, $store);
 
+        // Filter to only store-context permissions
+        $storePermissions = collect($result['permissions'])->filter(function ($permission) {
+            return $permission->context === 'store';
+        });
+
         return $this->ok('Store permissions and features retrieved successfully', [
-            'permissions' => $result['permissions'],
+            'permissions' => $storePermissions->values(),
             'features' => FeatureResource::collection($result['features']),
+            'context' => 'store',
         ]);
     }
 }

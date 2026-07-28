@@ -25,7 +25,7 @@ class AuthenticationService implements AuthenticationServiceInterface
     {
         $user = User::query()->where('email', $email)->first();
 
-        if (! $user || ! $this->validateCredentials($email, $password)) {
+        if (! $user || ! $this->validateCredentials($user, $password)) {
             Log::warning('Authentication failed', ['email' => $email]);
 
             return null;
@@ -39,14 +39,8 @@ class AuthenticationService implements AuthenticationServiceInterface
     /**
      * Validate user credentials
      */
-    public function validateCredentials(string $email, string $password): bool
+    public function validateCredentials(User $user, string $password): bool
     {
-        $user = User::query()->where('email', $email)->first();
-
-        if (! $user) {
-            return false;
-        }
-
         return Hash::check($password, $user->password);
     }
 
@@ -55,18 +49,26 @@ class AuthenticationService implements AuthenticationServiceInterface
      */
     public function registerWithSubscription(array $userData, ?Store $store = null): User
     {
-        $user = $this->register($userData);
+        try {
+            $user = $this->register($userData);
 
-        // Create subscription with automatic setup
-        $this->subscriptionService->createSubscriptionWithAutoSetup($user, $store);
+            // Create subscription with automatic setup
+            $this->subscriptionService->createSubscriptionWithAutoSetup($user, $store);
 
-        Log::info('User registered with subscription', [
-            'user_id' => $user->id,
-            'email' => $user->email,
-            'store_id' => $store?->id,
-        ]);
+            Log::info('User registered with subscription', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'store_id' => $store?->id,
+            ]);
 
-        return $user;
+            return $user;
+        } catch (\Exception $e) {
+            Log::error('User registration failed', [
+                'email' => $userData['email'] ?? null,
+                'error' => $e->getMessage(),
+            ]);
+            throw new \RuntimeException('Registration failed: ' . $e->getMessage(), 0, $e);
+        }
     }
 
     /**
