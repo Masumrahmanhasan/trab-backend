@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -21,9 +22,6 @@ use Illuminate\Database\Eloquent\Relations\MorphToMany;
 class Permission extends Model
 {
 
-    /**
-     * Get the route key for the model.
-     */
     public function getRouteKeyName(): string
     {
         return 'key';
@@ -45,27 +43,21 @@ class Permission extends Model
         );
     }
 
-    /**
-     * Scope a query to find a permission by its key.
-     */
-    public function scopeByKey(Builder $query, string $key): Builder
+    #[Scope]
+    protected function superAdmin(Builder $query): void
     {
-        return $query->where('key', $key);
+        $query->where('context', 'super_admin');
     }
 
-    /**
-     * Scope a query to only include super admin permissions.
-     */
-    public function scopeSuperAdmin(Builder $query): Builder
+    #[Scope]
+    protected function store(Builder $query): void
     {
-        return $query->where('context', 'super_admin');
+        $query->where('context', 'store');
     }
 
-    /**
-     * Scope a query to only include store permissions.
-     */
-    public function scopeStore(Builder $query): Builder
+    #[Scope]
+    protected function byKey(Builder $query, string $key): void
     {
-        return $query->where('context', 'store');
+        $query->where('key', $key);
     }
 }

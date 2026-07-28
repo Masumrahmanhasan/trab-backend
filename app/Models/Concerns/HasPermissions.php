@@ -8,7 +8,6 @@ use App\Services\PermissionCacheService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Support\Collection as SupportCollection;
-use Illuminate\Support\Facades\Cache;
 
 /**
  * @property-read Collection<int, Permission> $permissions
@@ -55,9 +54,17 @@ trait HasPermissions
         }
 
         // Try to find by ID first, then by key
-        return Permission::where('id', $permission)
+        return Permission::query()->where('id', $permission)
             ->orWhere('key', $permission)
             ->firstOrFail();
+    }
+
+    protected function clearPermissionCache(?int $teamId = null): void
+    {
+        if (method_exists($this, 'getKey') && method_exists($this, 'clearTeamId')) {
+            $cacheService = app(PermissionCacheService::class);
+            $cacheService->clearUserPermissions($this->getKey(), $teamId);
+        }
     }
 
     public function syncPermissions(array|SupportCollection $permissions, ?int $teamId = null): static
@@ -102,7 +109,7 @@ trait HasPermissions
 
     public function hasAnyPermissions(array $permissions, ?int $teamId = null): bool
     {
-        return collect($permissions)->some(fn ($permission) => $this->hasPermissionTo($permission, $teamId));
+        return collect($permissions)->some(fn($permission) => $this->hasPermissionTo($permission, $teamId));
     }
 
     public function hasPermissionTo(string|Permission $permission, ?int $teamId = null): bool
@@ -146,13 +153,5 @@ trait HasPermissions
         }
 
         return $this->permissions()->wherePivot('team_id', $teamId)->get();
-    }
-
-    protected function clearPermissionCache(?int $teamId = null): void
-    {
-        if (method_exists($this, 'getKey') && method_exists($this, 'clearTeamId')) {
-            $cacheService = app(PermissionCacheService::class);
-            $cacheService->clearUserPermissions($this->getKey(), $teamId);
-        }
     }
 }

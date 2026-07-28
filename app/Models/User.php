@@ -4,9 +4,12 @@ namespace App\Models;
 
 use App\Models\Concerns\HasPermissions;
 use App\Models\Concerns\HasRoles;
+use App\Services\ActivityLogger;
 use Database\Factories\UserFactory;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -15,8 +18,6 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Collection;
 use Laravel\Sanctum\HasApiTokens;
-use Illuminate\Contracts\Auth\MustVerifyEmail;
-use App\Services\ActivityLogger;
 
 /**
  * @property-read int $id
@@ -49,11 +50,6 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Subscription::class);
     }
 
-    public function activeSubscription(): HasOne
-    {
-        return $this->hasOne(Subscription::class)->current();
-    }
-
     public function getStores(): Collection
     {
         $teamIds = $this->roles()->pluck('team_id')->filter()->unique();
@@ -66,22 +62,28 @@ class User extends Authenticatable implements MustVerifyEmail
             ->get();
     }
 
-    /**
-     * Scope a query to only include users in a specific store.
-     */
-    public function scopeInStore(Builder $query, int $storeId): Builder
+    public function hasActiveSubscription(): bool
     {
-        return $query->whereHas('roles', function ($q) use ($storeId) {
+        return $this->activeSubscription()->exists();
+    }
+
+    public function activeSubscription(): HasOne
+    {
+        return $this->hasOne(Subscription::class)->current();
+    }
+
+    #[Scope]
+    protected function inStore(Builder $query, int $storeId): void
+    {
+        $query->whereHas('roles', function ($q) use ($storeId) {
             $q->wherePivot('team_id', $storeId);
         });
     }
 
-    /**
-     * Scope a query to only include users with a specific role in a store.
-     */
-    public function scopeWithRoleInStore(Builder $query, string|Role $role, int $storeId): Builder
+    #[Scope]
+    protected function withRoleInStore(Builder $query, string|Role $role, int $storeId): void
     {
-        return $query->whereHas('roles', function ($q) use ($role, $storeId) {
+        $query->whereHas('roles', function ($q) use ($role, $storeId) {
             $q->where('key', is_string($role) ? $role : $role->key)
                 ->wherePivot('team_id', $storeId);
         });
@@ -116,13 +118,5 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         $permissionKey = $permission instanceof Permission ? $permission->key : $permission;
         app(ActivityLogger::class)->logPermissionRevocation($this, $permissionKey, $teamId);
-    }
-
-    /**
-     * Check if user has active subscription
-     */
-    public function hasActiveSubscription(): bool
-    {
-        return $this->activeSubscription()->exists();
     }
 }

@@ -80,10 +80,10 @@ class Subscription extends Model
             ($this->ends_at === null || $this->ends_at->isFuture());
     }
 
-    #[Scope('active')]
-    protected function active(Builder $query): Builder
+    #[Scope]
+    protected function active(Builder $query): void
     {
-        return $query->where('status', 'active')
+        $query->where('status', 'active')
             ->where('starts_at', '<=', now())
             ->where(function ($query) {
                 $query->whereNull('ends_at')
@@ -109,9 +109,9 @@ class Subscription extends Model
     }
 
     #[Scope]
-    protected function expired(Builder $query): Builder
+    protected function expired(Builder $query): void
     {
-        return $query->where('status', 'expired')
+        $query->where('status', 'expired')
             ->orWhere(function ($query) {
                 $query->where('ends_at', '<', now())
                     ->whereNotNull('ends_at');
@@ -135,34 +135,34 @@ class Subscription extends Model
     }
 
     #[Scope]
-    protected function forStore(Builder $query, int $storeId): Builder
+    protected function forStore(Builder $query, int $storeId): void
     {
-        return $query->where('store_id', $storeId);
+        $query->where('store_id', $storeId);
     }
 
     #[Scope]
-    protected function cancelled(Builder $query): Builder
+    protected function cancelled(Builder $query): void
     {
-        return $query->where('status', 'cancelled');
+        $query->where('status', 'cancelled');
     }
 
     #[Scope]
-    protected function trialing(Builder $query): Builder
+    protected function trialing(Builder $query): void
     {
-        return $query->where('status', 'trialing')
+        $query->where('status', 'trialing')
             ->where('trial_ends_at', '>', now());
     }
 
     #[Scope]
-    protected function forUser(Builder $query, int $userId): Builder
+    protected function forUser(Builder $query, int $userId): void
     {
-        return $query->where('user_id', $userId);
+        $query->where('user_id', $userId);
     }
 
     #[Scope]
-    protected function current(Builder $query): Builder
+    protected function current(Builder $query): void
     {
-        return $query->where(function ($query) {
+        $query->where(function ($query) {
             $query->active()->orWhere(function ($query) {
                 $query->where('status', 'trialing')
                     ->where('trial_ends_at', '>', now());
