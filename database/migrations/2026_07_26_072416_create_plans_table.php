@@ -1,11 +1,12 @@
 <?php
 
+use App\Enums\BillingCycle;
+use App\Enums\PlansStatus;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
-{
+return new class extends Migration {
     /**
      * Run the migrations.
      */
@@ -17,10 +18,9 @@ return new class extends Migration
             $table->string('slug')->unique();
             $table->text('description')->nullable();
             $table->decimal('price', 10, 2);
-            $table->string('billing_cycle')->default('monthly'); // monthly, yearly
-            $table->boolean('is_active')->default(true);
-            $table->integer('max_stores')->default(1);
-            $table->integer('max_staff_per_store')->default(10);
+            $table->enum('billing_cycle', BillingCycle::cases())->default(BillingCycle::MONTHLY->value);
+            $table->enum('status', PlansStatus::cases())->default(PlansStatus::DRAFT->value);
+            $table->integer('trial_days')->default(0);
             $table->timestamps();
         });
     }

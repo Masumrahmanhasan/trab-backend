@@ -1,11 +1,11 @@
 <?php
 
+use App\Enums\SubscriptionStatus;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
-{
+return new class extends Migration {
     /**
      * Run the migrations.
      */
@@ -16,7 +16,7 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->foreignId('plan_id')->constrained()->onDelete('cascade');
             $table->foreignId('store_id')->nullable()->constrained()->onDelete('cascade');
-            $table->string('status')->default('active'); // active, cancelled, expired, trialing
+            $table->enum('status', SubscriptionStatus::cases())->default(SubscriptionStatus::ACTIVE->value);
             $table->timestamp('starts_at')->nullable();
             $table->timestamp('ends_at')->nullable();
             $table->timestamp('trial_ends_at')->nullable();
