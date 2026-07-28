@@ -4,50 +4,58 @@ namespace App\Http\Controllers\Api\V1\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\RegisterRequest;
-use App\Models\User;
+use App\Http\Resources\Auth\LoginResource;
+use App\Services\Contracts\AuthenticationServiceInterface;
 use App\Traits\ApiResponse;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
+use Throwable;
+use function __;
+use function config;
 
 class RegistrationController extends Controller
 {
     use ApiResponse;
 
-    public function register(RegisterRequest $request)
+    protected AuthenticationServiceInterface $authService;
+
+    public function __construct(AuthenticationServiceInterface $authService)
     {
-        $request->validated($request->all());
+        $this->authService = $authService;
+    }
+
+    /**
+     * @throws Throwable
+     */
+    public function register(RegisterRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
         $key = $this->throttleKey($request);
         $this->checkRateLimit($key);
 
-        $user = $this->createUser($request->validated());
+        $user = $this->authService->registerWithSubscription($validated);
 
         RateLimiter::clear($key);
-        $token = $user->createToken(config('app.name').'-token')->plainTextToken;
-        return $this->ok(__('messages.login'), [
-            'token' => $token
-        ]);
+        $token = $this->authService->generateToken($user, config('app.name').'-token');
+        return $this->ok(__('messages.login'), new LoginResource([
+            'token' => $token,
+            'user' => $user,
+        ]));
     }
 
-    protected function throttleKey($request)
+    protected function throttleKey(Request $request): string
     {
-        return 'register|'.$request->ip().'|'.$request->method().'|'.$request->ip();
+        return 'register|'.$request->ip().'|'.$request->method();
     }
 
-    protected function checkRateLimit($key)
+    protected function checkRateLimit(string $key): void
     {
         if (RateLimiter::tooManyAttempts($key, 5)) {
             $seconds = RateLimiter::availableIn($key);
 
-            throw ValidationException::withMessages(['email' => "Too many Registration attempts. Please try again in $seconds seconds."]);
+            throw ValidationException::withMessages(['email' => "Too many Registration attempts. Please try again in {$seconds} seconds."]);
         }
-    }
-
-    protected function createUser(array $request)
-    {
-        return User::query()->create([
-            'name' => $request['name'],
-            'email' => $request['email'],
-            'password' => $request['password']
-        ]);
     }
 }

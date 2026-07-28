@@ -12,24 +12,25 @@ use Illuminate\Support\Collection as SupportCollection;
  */
 trait HasRoles
 {
-    public function hasAnyRole(array $roles): bool
+    use HasTeamContext;
+
+    public function hasAnyRole(array $roles, ?int $teamId = null): bool
     {
-        return collect($roles)->some(fn($role) => $this->hasRole($role));
+        return collect($roles)->some(fn ($role) => $this->hasRole($role, $teamId));
     }
 
-    public function hasRole(string|Role $role): bool
+    public function hasRole(string|Role $role, ?int $teamId = null): bool
     {
         $key = $role instanceof Role ? $role->key : $role;
-        return $this->roles->contains('key', $key);
-    }
+        $teamId = $teamId ?? $this->getTeamId();
 
-    public function assignRole(string|Role $role): static
-    {
-        $this->roles()->syncWithoutDetaching(
-            $this->resolveRole($role)
-        );
+        $rolesQuery = $this->roles();
 
-        return $this;
+        if ($teamId !== null) {
+            $rolesQuery->wherePivot('team_id', $teamId);
+        }
+
+        return $rolesQuery->get()->contains('key', $key);
     }
 
     public function roles(): MorphToMany
@@ -40,29 +41,68 @@ trait HasRoles
             'model_has_roles',
             'model_id',
             'role_id'
-        );
+        )->withPivot('team_id');
+    }
+
+    public function assignRole(string|Role $role, ?int $teamId = null): static
+    {
+        $teamId = $teamId ?? $this->getTeamId();
+
+        $this->roles()->syncWithoutDetaching([
+            $this->resolveRole($role)->id => ['team_id' => $teamId],
+        ]);
+
+        return $this;
     }
 
     public function resolveRole(string|Role $role): Role
     {
-        return $role instanceof Role
-            ? $role
-            : Role::query()->where('key', $role)->firstOrFail();
+        if ($role instanceof Role) {
+            return $role;
+        }
+
+        // Try to find by ID first, then by key
+        return Role::where('id', $role)
+            ->orWhere('key', $role)
+            ->firstOrFail();
     }
 
-    public function removeRole(string|Role $role): static
+    public function removeRole(string|Role $role, ?int $teamId = null): static
     {
-        $this->roles()->detach(
-            $this->resolveRole($role)
-        );
+        $teamId = $teamId ?? $this->getTeamId();
+
+        $query = $this->roles()->where($this->resolveRole($role)->getKeyName(), $this->resolveRole($role)->id);
+
+        if ($teamId !== null) {
+            $query->wherePivot('team_id', $teamId);
+        }
+
+        $query->detach();
+
         return $this;
     }
 
-    public function syncRoles(array|SupportCollection $roles): static
+    public function syncRoles(array|SupportCollection $roles, ?int $teamId = null): static
     {
-        $this->roles()->sync(
-            collect($roles)->map(fn($role) => $this->resolveRole($role)->id)
-        );
+        $teamId = $teamId ?? $this->getTeamId();
+
+        $syncData = collect($roles)->mapWithKeys(function ($role) use ($teamId) {
+            return [$this->resolveRole($role)->id => ['team_id' => $teamId]];
+        });
+
+        $this->roles()->sync($syncData);
+
         return $this;
+    }
+
+    public function rolesInTeam(?int $teamId = null): Collection
+    {
+        $teamId = $teamId ?? $this->getTeamId();
+
+        if ($teamId === null) {
+            return $this->roles;
+        }
+
+        return $this->roles()->wherePivot('team_id', $teamId)->get();
     }
 }
