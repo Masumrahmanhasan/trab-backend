@@ -20,6 +20,11 @@ trait ApiResponse
         ]);
     }
 
+    protected function forbidden($message = 'Forbidden'): JsonResponse
+    {
+        return $this->error($message, 403);
+    }
+
     protected function error($message, $statusCode = 400): JsonResponse
     {
         return response()->json([
@@ -29,13 +34,13 @@ trait ApiResponse
         ], $statusCode);
     }
 
-    protected function forbidden($message = 'Forbidden'): JsonResponse
-    {
-        return $this->error($message, 403);
-    }
-
     protected function created($message, $data = []): JsonResponse
     {
         return $this->success($message, $data, 201);
+    }
+
+    protected function notFound($message = 'Not Found'): JsonResponse
+    {
+        return $this->error($message, 404);
     }
 }

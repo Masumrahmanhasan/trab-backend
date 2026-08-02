@@ -5,14 +5,15 @@ namespace App\Http\Controllers\Api\V1\Auth;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Resources\Auth\LoginResource;
+use App\Models\User;
 use App\Services\Contracts\AuthenticationServiceInterface;
 use App\Traits\ApiResponse;
+use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use Illuminate\Auth\Events\Verified;
 
 class LoginController extends Controller
 {
@@ -76,7 +77,7 @@ class LoginController extends Controller
 
     public function verifyEmail(Request $request, $id, $hash): JsonResponse
     {
-        $user = \App\Models\User::find($id);
+        $user = User::find($id);
 
         if (!$user) {
             return $this->notFound('User not found');
