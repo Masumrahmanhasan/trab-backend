@@ -6,8 +6,10 @@ use App\Models\Store;
 use App\Models\User;
 use App\Services\Contracts\AuthenticationServiceInterface;
 use App\Services\Contracts\SubscriptionServiceInterface;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class AuthenticationService implements AuthenticationServiceInterface
 {
@@ -19,13 +21,13 @@ class AuthenticationService implements AuthenticationServiceInterface
     }
 
     /**
-     * Authenticate user with credentials
+     * Authenticate a user with credentials
      */
     public function authenticate(string $email, string $password): ?User
     {
         $user = User::query()->where('email', $email)->first();
 
-        if (! $user || ! $this->validateCredentials($user, $password)) {
+        if (!$user || !$this->validateCredentials($user, $password)) {
             Log::warning('Authentication failed', ['email' => $email]);
 
             return null;
@@ -45,34 +47,27 @@ class AuthenticationService implements AuthenticationServiceInterface
     }
 
     /**
-     * Register new user with subscription setup
+     * Register a new user with subscription setup
+     * @param array $userData
+     * @param Store|null $store
+     * @return User
+     * @throws Throwable
      */
     public function registerWithSubscription(array $userData, ?Store $store = null): User
     {
-        try {
+        return DB::transaction(function () use ($userData, $store) {
             $user = $this->register($userData);
-
-            // Create subscription with automatic setup
-            $this->subscriptionService->createSubscriptionWithAutoSetup($user, $store);
-
             Log::info('User registered with subscription', [
                 'user_id' => $user->id,
                 'email' => $user->email,
                 'store_id' => $store?->id,
             ]);
-
             return $user;
-        } catch (\Exception $e) {
-            Log::error('User registration failed', [
-                'email' => $userData['email'] ?? null,
-                'error' => $e->getMessage(),
-            ]);
-            throw new \RuntimeException('Registration failed: ' . $e->getMessage(), 0, $e);
-        }
+        });
     }
 
     /**
-     * Register new user
+     * Register a new user
      */
     public function register(array $userData): User
     {
@@ -88,7 +83,7 @@ class AuthenticationService implements AuthenticationServiceInterface
     }
 
     /**
-     * Generate authentication token for user
+     * Generate authentication token for the user
      */
     public function generateToken(User $user, string $tokenName = 'auth_token'): string
     {

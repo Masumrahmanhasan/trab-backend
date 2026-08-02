@@ -4,8 +4,6 @@ namespace App\Models;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Scope;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
@@ -18,15 +16,9 @@ use Illuminate\Database\Eloquent\Relations\MorphToMany;
  * @property-read null|CarbonImmutable $created_at
  * @property-read null|CarbonImmutable $updated_at
  */
-#[Fillable(['name', 'key', 'context'])]
+#[Fillable(['name', 'key'])]
 class Permission extends Model
 {
-
-    public function getRouteKeyName(): string
-    {
-        return 'key';
-    }
-
     public function roles(): BelongsToMany
     {
         return $this->belongsToMany(Role::class, 'role_has_permissions');
@@ -41,23 +33,5 @@ class Permission extends Model
             'permission_id',
             'model_id',
         );
-    }
-
-    #[Scope]
-    protected function superAdmin(Builder $query): void
-    {
-        $query->where('context', 'super_admin');
-    }
-
-    #[Scope]
-    protected function store(Builder $query): void
-    {
-        $query->where('context', 'store');
-    }
-
-    #[Scope]
-    protected function byKey(Builder $query, string $key): void
-    {
-        $query->where('key', $key);
     }
 }

@@ -14,7 +14,6 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
-use RuntimeException;
 use Throwable;
 
 class SubscriptionService implements SubscriptionServiceInterface
@@ -162,10 +161,8 @@ class SubscriptionService implements SubscriptionServiceInterface
     {
         $defaultPlan = $this->getDefaultPlan();
 
-        Log::info('Default plan', [$defaultPlan]);
-
         if (!$defaultPlan) {
-            throw new RuntimeException('No default plan configured');
+            return response()->json(['message' => 'No default plan available'], 404);
         }
 
         // Create subscription with trial
@@ -190,9 +187,6 @@ class SubscriptionService implements SubscriptionServiceInterface
         return $subscription;
     }
 
-    /**
-     * Get the default plan.
-     */
     public function getDefaultPlan(): ?Plan
     {
         return Plan::default()->active()->first();

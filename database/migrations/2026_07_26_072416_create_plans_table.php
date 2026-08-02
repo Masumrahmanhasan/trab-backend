@@ -21,6 +21,7 @@ return new class extends Migration {
             $table->enum('billing_cycle', BillingCycle::cases())->default(BillingCycle::MONTHLY->value);
             $table->enum('status', PlansStatus::cases())->default(PlansStatus::DRAFT->value);
             $table->integer('trial_days')->default(0);
+            $table->boolean('is_default')->default(false);
             $table->timestamps();
         });
     }

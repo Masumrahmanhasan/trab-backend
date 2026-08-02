@@ -44,7 +44,7 @@ trait HasPermissions
             'model_has_permissions',
             'model_id',
             'permission_id',
-        )->withPivot('team_id');
+        )->withPivot('team_id')->withTimestamps();
     }
 
     public function resolvePermission(string|Permission $permission): Permission

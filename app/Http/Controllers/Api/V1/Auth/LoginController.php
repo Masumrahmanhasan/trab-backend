@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api\V1\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
-use App\Http\Resources\Auth\LoginResource;
 use App\Models\User;
 use App\Services\Contracts\AuthenticationServiceInterface;
 use App\Traits\ApiResponse;
@@ -45,9 +44,9 @@ class LoginController extends Controller
 
         $token = $this->authService->generateToken($user, 'trab_auth_token');
 
-        return $this->ok('Authenticated', new LoginResource([
+        return $this->ok('Authenticated', [
             'token' => $token,
-        ]));
+        ]);
     }
 
     protected function throttleKey(Request $request): string

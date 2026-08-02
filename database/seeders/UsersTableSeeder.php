@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\Roles;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 
@@ -16,6 +17,6 @@ class UsersTableSeeder extends Seeder
             'name' => 'Super Admin',
             'email' => 'superadmin@gmail.com',
         ]);
-        $user->assignRole('superadmin');
+        $user->assignRole(Roles::ADMIN->value);
     }
 }

@@ -8,4 +8,9 @@ enum PlansStatus: int
     case INACTIVE = 0;
     case DRAFT = 2;
 
+    public static function defaultPlanKey(): string
+    {
+        return 'default';
+    }
+
 }

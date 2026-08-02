@@ -2,12 +2,12 @@
 
 namespace App\Models;
 
+use App\Enums\PlansStatus;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * @property-read int $id
@@ -25,12 +25,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @method static Builder|Plan default()
  * @method static Builder|Plan active()
  */
-#[Fillable(['name', 'slug', 'description', 'price', 'billing_cycle', 'is_active', 'max_stores', 'max_staff_per_store', 'trial_days', 'is_default'])]
+#[Fillable(['name', 'slug', 'description', 'price', 'billing_cycle', 'trial_days', 'is_default'])]
 class Plan extends Model
 {
-    /**
-     * Get the route key for the model.
-     */
     public function getRouteKeyName(): string
     {
         return 'slug';
@@ -44,16 +41,6 @@ class Plan extends Model
         return $this->belongsToMany(Feature::class, 'plan_feature');
     }
 
-    public function stores(): HasMany
-    {
-        return $this->hasMany(Store::class);
-    }
-
-    public function subscriptions(): HasMany
-    {
-        return $this->hasMany(Subscription::class);
-    }
-
     #[Scope]
     protected function default(Builder $query): void
     {
@@ -63,6 +50,6 @@ class Plan extends Model
     #[Scope]
     protected function active(Builder $query): void
     {
-        $query->where('is_active', true);
+        $query->where('status', PlansStatus::ACTIVE->value);
     }
 }
