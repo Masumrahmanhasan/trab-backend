@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Services\ActivityLogger;
 use App\Services\Contracts\StoreOnboardingServiceInterface;
 use App\Traits\ApiResponse;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,8 +22,10 @@ use Illuminate\Support\Facades\DB;
 class StoreController extends Controller
 {
     use ApiResponse;
+    use AuthorizesRequests;
 
     protected StoreOnboardingServiceInterface $onboardingService;
+
     protected ActivityLogger $activityLogger;
 
     public function __construct(
@@ -48,16 +51,6 @@ class StoreController extends Controller
     }
 
     /**
-     * Display the specified store.
-     */
-    public function show(Request $request, Store $store): JsonResponse
-    {
-        $this->authorize('view', $store);
-
-        return $this->ok('Store retrieved successfully', new StoreResource($store->load('plan')));
-    }
-
-    /**
      * Store a newly created store in storage.
      */
     public function store(StoreStoreRequest $request): JsonResponse
@@ -78,14 +71,7 @@ class StoreController extends Controller
      */
     public function show(Request $request, Store $store): JsonResponse
     {
-        if (! $request->user()) {
-            return $this->forbidden('Authentication required');
-        }
-
-        // Check if user owns the store or has access
-        if ($store->owner_id !== $request->user()->id) {
-            return $this->forbidden('You do not have access to this store');
-        }
+        $this->authorize('view', $store);
 
         return $this->ok('Store retrieved successfully', new StoreResource($store->load('plan')));
     }
@@ -155,7 +141,7 @@ class StoreController extends Controller
         $validated = $request->validated();
         $staffUser = User::where('email', $validated['email'])->first();
 
-        if (!$staffUser) {
+        if (! $staffUser) {
             return $this->notFound('User not found');
         }
 
@@ -246,7 +232,7 @@ class StoreController extends Controller
      */
     protected function validateStaffLimit(Store $store): void
     {
-        if (!$store->plan) {
+        if (! $store->plan) {
             throw new \InvalidArgumentException('Store has no plan assigned');
         }
 

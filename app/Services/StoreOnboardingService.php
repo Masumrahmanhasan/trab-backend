@@ -2,17 +2,26 @@
 
 namespace App\Services;
 
+use App\Models\Plan;
+use App\Models\Role;
 use App\Models\Store;
 use App\Models\User;
 use App\Services\Contracts\StoreOnboardingServiceInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use InvalidArgumentException;
 
 class StoreOnboardingService implements StoreOnboardingServiceInterface
 {
+    public function __construct(
+        protected PermissionSyncService $permissionSync,
+    ) {}
+
     /**
-     * Assign plan features as permissions to store owner
+     * Materialise a store's plan features as direct store-scoped permissions
+     * on the owner, and make sure the owner holds the `owner` role for the
+     * store.
      */
     public function assignPlanPermissionsToOwner(Store $store): void
     {
@@ -26,13 +35,15 @@ class StoreOnboardingService implements StoreOnboardingServiceInterface
             return;
         }
 
-        $permissions = $store->getAvailablePermissions();
+        DB::transaction(function () use ($store) {
+            $this->permissionSync->assignStoreOwnerRole($store);
 
-        DB::transaction(function () use ($store, $permissions) {
-            // Remove existing permissions for this store context
-            $store->owner->permissions()->wherePivot('team_id', $store->id)->detach();
+            $permissions = $store->getAvailablePermissions();
 
-            // Assign new permissions based on plan features
+            $store->owner->permissions()
+                ->wherePivot('team_id', $store->id)
+                ->detach();
+
             foreach ($permissions as $permission) {
                 $store->owner->assignPermissionTo($permission, $store->id);
             }
@@ -46,35 +57,45 @@ class StoreOnboardingService implements StoreOnboardingServiceInterface
     }
 
     /**
-     * Create a new store with plan assignment
+     * Create a new store under the owner, enforcing the plan's store limit,
+     * then grant the owner their plan permissions within the store.
+     *
+     * @throws InvalidArgumentException when the plan's store limit is reached
      */
     public function createStoreWithPlan(array $storeData, User $owner, int $planId): Store
     {
-        return DB::transaction(function () use ($storeData, $owner, $planId) {
+        $plan = Plan::findOrFail($planId);
+
+        $activeSubscription = $owner->activeSubscription;
+
+        if ($activeSubscription && $activeSubscription->plan_id !== $plan->id) {
+            throw new InvalidArgumentException('Store plan must match your active subscription plan');
+        }
+
+        $this->assertStoreLimit($owner, $plan->max_stores);
+
+        return DB::transaction(function () use ($storeData, $owner, $plan) {
             $store = Store::create([
                 'name' => $storeData['name'],
                 'slug' => $storeData['slug'],
                 'description' => $storeData['description'] ?? null,
                 'owner_id' => $owner->id,
-                'plan_id' => $planId,
+                'plan_id' => $plan->id,
             ]);
 
-            // Assign plan permissions to owner
+            $this->permissionSync->assignStoreOwnerRole($store);
             $this->assignPlanPermissionsToOwner($store);
 
             Log::info('Store created with plan', [
                 'store_id' => $store->id,
                 'owner_id' => $owner->id,
-                'plan_id' => $planId,
+                'plan_id' => $plan->id,
             ]);
 
             return $store;
         });
     }
 
-    /**
-     * Update store plan and reassign permissions
-     */
     public function updateStorePlan(Store $store, int $newPlanId): void
     {
         DB::transaction(function () use ($store, $newPlanId) {
@@ -90,43 +111,47 @@ class StoreOnboardingService implements StoreOnboardingServiceInterface
         });
     }
 
-    /**
-     * Get available permissions for store owner based on plan
-     */
     public function getOwnerAvailablePermissions(Store $store): Collection
     {
         return $store->getAvailablePermissions();
     }
 
-    /**
-     * Validate if permission is available to store owner
-     */
     public function isPermissionAvailableToOwner(Store $store, string $permissionKey): bool
     {
         return $store->getAvailablePermissions()->contains('key', $permissionKey);
     }
 
-    /**
-     * Validate if all permissions are available to store owner
-     */
     public function validatePermissionsForStore(Store $store, array $permissionKeys): void
     {
-        if (!$store->plan) {
-            throw new \InvalidArgumentException('Store has no plan assigned');
+        if (! $store->plan) {
+            throw new InvalidArgumentException('Store has no plan assigned');
         }
 
-        $availablePermissions = $store->getAvailablePermissions()->pluck('key')->toArray();
+        $availablePermissions = $store->getAvailablePermissions()->pluck('key')->all();
 
-        $invalidPermissions = [];
-        foreach ($permissionKeys as $permissionKey) {
-            if (! in_array($permissionKey, $availablePermissions)) {
-                $invalidPermissions[] = $permissionKey;
-            }
+        $invalidPermissions = array_diff($permissionKeys, $availablePermissions);
+
+        if ($invalidPermissions !== []) {
+            throw new InvalidArgumentException(
+                'Permissions not available in your plan: '.implode(', ', $invalidPermissions)
+            );
+        }
+    }
+
+    /**
+     * Enforce the plan's maximum number of stores for the owner.
+     */
+    protected function assertStoreLimit(User $owner, int $maxStores): void
+    {
+        if ($maxStores <= 0) {
+            return;
         }
 
-        if (count($invalidPermissions) > 0) {
-            throw new \InvalidArgumentException(
-                'Permissions not available in your plan: ' . implode(', ', $invalidPermissions)
+        $currentStores = $owner->ownedStores()->count();
+
+        if ($currentStores >= $maxStores) {
+            throw new InvalidArgumentException(
+                "Store limit reached. Your plan allows {$maxStores} stores."
             );
         }
     }

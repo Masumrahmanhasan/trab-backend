@@ -28,6 +28,9 @@ trait HasRoles
 
         if ($teamId !== null) {
             $rolesQuery->wherePivot('team_id', $teamId);
+        } else {
+            // Without a team context only global role assignments count.
+            $rolesQuery->wherePivot('team_id', null);
         }
 
         return $rolesQuery->get()->contains('key', $key);

@@ -2,15 +2,14 @@
 
 namespace App\Enums;
 
-enum PlansStatus: int
+enum PlansStatus: string
 {
-    case ACTIVE = 1;
-    case INACTIVE = 0;
-    case DRAFT = 2;
+    case ACTIVE = 'active';
+    case INACTIVE = 'inactive';
+    case DRAFT = 'draft';
 
     public static function defaultPlanKey(): string
     {
         return 'default';
     }
-
 }

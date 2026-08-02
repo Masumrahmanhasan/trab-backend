@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\PermissionContext;
 use App\Models\Concerns\HasPermissions;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -14,10 +15,12 @@ use Illuminate\Database\Eloquent\Relations\MorphToMany;
  * @property-read int $id
  * @property-read string $name
  * @property-read string $key
+ * @property-read string $context
+ * @property-read string $guard_name
  * @property-read null|CarbonImmutable $created_at
  * @property-read null|CarbonImmutable $updated_at
  */
-#[Fillable(['name', 'key'])]
+#[Fillable(['name', 'key', 'context', 'guard_name'])]
 class Role extends Model
 {
     use HasPermissions;
@@ -57,5 +60,21 @@ class Role extends Model
     public function scopeByKey(Builder $query, string $key): Builder
     {
         return $query->where('key', $key);
+    }
+
+    /**
+     * Scope to platform (SaaS-owner) roles only.
+     */
+    public function scopePlatform(Builder $query): Builder
+    {
+        return $query->where('context', PermissionContext::PLATFORM->value);
+    }
+
+    /**
+     * Scope to store (tenant) roles only.
+     */
+    public function scopeStore(Builder $query): Builder
+    {
+        return $query->where('context', PermissionContext::STORE->value);
     }
 }

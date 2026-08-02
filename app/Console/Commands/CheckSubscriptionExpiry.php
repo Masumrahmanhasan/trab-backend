@@ -3,8 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Subscription;
-use App\Models\User;
-use App\Services\PermissionCacheService;
+use App\Services\Contracts\SubscriptionServiceInterface;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -12,10 +11,11 @@ use Illuminate\Support\Facades\Log;
 class CheckSubscriptionExpiry extends Command
 {
     protected $signature = 'subscriptions:check-expiry';
-    protected $description = 'Check and handle expired subscriptions';
+
+    protected $description = 'Expire subscriptions whose paid period or trial has ended';
 
     public function __construct(
-        protected PermissionCacheService $cacheService
+        protected SubscriptionServiceInterface $subscriptionService,
     ) {
         parent::__construct();
     }
@@ -25,8 +25,7 @@ class CheckSubscriptionExpiry extends Command
         $this->info('Checking for expired subscriptions...');
 
         $expiredSubscriptions = Subscription::query()
-            ->where('status', '!=', 'expired')
-            ->where('status', '!=', 'cancelled')
+            ->whereNotIn('status', ['expired', 'cancelled'])
             ->where(function ($query) {
                 $query->where('ends_at', '<', now())
                     ->orWhere(function ($query) {
@@ -40,27 +39,12 @@ class CheckSubscriptionExpiry extends Command
 
         foreach ($expiredSubscriptions as $subscription) {
             DB::transaction(function () use ($subscription, &$count) {
-                $oldStatus = $subscription->status;
-                $subscription->update(['status' => 'expired']);
-
-                // Revoke store-specific permissions
-                if ($subscription->store) {
-                    $subscription->store->owner->permissions()
-                        ->wherePivot('team_id', $subscription->store->id)
-                        ->detach();
-
-                    // Clear cache for the user
-                    $this->cacheService->clearUserPermissions(
-                        $subscription->user_id,
-                        $subscription->store->id
-                    );
-                }
+                $this->subscriptionService->expireSubscription($subscription);
 
                 Log::info('Subscription expired', [
                     'subscription_id' => $subscription->id,
                     'user_id' => $subscription->user_id,
                     'store_id' => $subscription->store_id,
-                    'old_status' => $oldStatus,
                 ]);
 
                 $count++;

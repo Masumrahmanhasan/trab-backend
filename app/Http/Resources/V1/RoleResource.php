@@ -31,8 +31,8 @@ class RoleResource extends JsonResource
                 'permissions' => PermissionResource::collection($this->resource->permissions),
             ],
             'links' => [
-                ['self' => route('roles.show', $this->resource->id)]
-            ]
+                ['self' => route('roles.show', $this->resource->id)],
+            ],
         ];
     }
 }

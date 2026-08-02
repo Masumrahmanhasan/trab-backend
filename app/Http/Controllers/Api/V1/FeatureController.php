@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\FeatureResource;
 use App\Models\Feature;
+use App\Models\Permission;
 use App\Models\Store;
 use App\Services\Contracts\UserFeatureServiceInterface;
 use App\Traits\ApiResponse;
@@ -89,7 +90,8 @@ class FeatureController extends Controller
 
         // Super admin gets all super admin permissions
         if ($user->hasRole('super-admin')) {
-            $permissions = \App\Models\Permission::superAdmin()->get();
+            $permissions = Permission::superAdmin()->get();
+
             return $this->ok('Super admin permissions retrieved successfully', [
                 'permissions' => $permissions,
                 'context' => 'super_admin',

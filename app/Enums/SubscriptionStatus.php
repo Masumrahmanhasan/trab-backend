@@ -2,11 +2,11 @@
 
 namespace App\Enums;
 
-enum SubscriptionStatus: int
+enum SubscriptionStatus: string
 {
-    case ACTIVE = 1;
-    case INACTIVE = 0;
-    case CANCELED = 2;
-    case PENDING = 3;
-    case TRIAL = 4;
+    case ACTIVE = 'active';
+    case TRIALING = 'trialing';
+    case PENDING = 'pending';
+    case CANCELLED = 'cancelled';
+    case EXPIRED = 'expired';
 }

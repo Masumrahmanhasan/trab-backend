@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\FeatureStatus;
+use App\Enums\PermissionContext;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -16,7 +17,9 @@ return new class extends Migration {
             $table->string('name');
             $table->string('key')->unique();
             $table->text('description')->nullable();
-            $table->enum('status', FeatureStatus::cases())->default(FeatureStatus::DRAFT->value);
+            $table->string('permission_key')->nullable()->index();
+            $table->enum('context', PermissionContext::cases())->default(PermissionContext::STORE->value);
+            $table->enum('status', FeatureStatus::cases())->default(FeatureStatus::ACTIVE->value);
             $table->timestamps();
         });
     }

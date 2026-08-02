@@ -2,181 +2,45 @@
 
 namespace App\Services;
 
+use App\Enums\BillingCycle;
+use App\Enums\SubscriptionStatus;
 use App\Models\Plan;
-use App\Models\Role;
 use App\Models\Store;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Services\Contracts\StoreOnboardingServiceInterface;
 use App\Services\Contracts\SubscriptionServiceInterface;
-use Carbon\Carbon;
 use DateTime;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
-use Throwable;
 
 class SubscriptionService implements SubscriptionServiceInterface
 {
-    /**
-     * Cancel a subscription.
-     */
-    public function cancelSubscription(Subscription $subscription): Subscription
-    {
-        if (!$subscription->isActive() && !$subscription->isOnTrial()) {
-            throw new InvalidArgumentException('Only active or trialing subscriptions can be cancelled');
-        }
-
-        DB::transaction(function () use ($subscription) {
-            $subscription->cancel();
-
-            Log::info('Subscription cancelled', [
-                'subscription_id' => $subscription->id,
-                'user_id' => $subscription->user_id,
-            ]);
-        });
-
-        return $subscription->fresh();
-    }
+    public function __construct(
+        protected PermissionSyncService $permissionSync,
+        protected StoreOnboardingServiceInterface $storeOnboarding,
+    ) {}
 
     /**
-     * Resume a cancelled subscription.
-     * @throws Throwable
-     */
-    public function resumeSubscription(Subscription $subscription): Subscription
-    {
-        if (!$subscription->isCancelled()) {
-            throw new InvalidArgumentException('Only cancelled subscriptions can be resumed');
-        }
-
-        DB::transaction(function () use ($subscription) {
-            $subscription->resume();
-
-            Log::info('Subscription resumed', [
-                'subscription_id' => $subscription->id,
-                'user_id' => $subscription->user_id,
-            ]);
-        });
-
-        return $subscription->fresh();
-    }
-
-    /**
-     * Upgrade or change subscription plan.
-     */
-    public function changePlan(Subscription $subscription, Plan $newPlan): Subscription
-    {
-        if (!$subscription->isActive()) {
-            throw new InvalidArgumentException('Only active subscriptions can change plans');
-        }
-
-        DB::transaction(function () use ($subscription, $newPlan) {
-            $oldPlanId = $subscription->plan_id;
-            $subscription->update(['plan_id' => $newPlan->id]);
-
-            // Update store plan if subscription is linked to a store
-            if ($subscription->store) {
-                $subscription->store->update(['plan_id' => $newPlan->id]);
-            }
-
-            // Recalculate end date based on new plan
-            $subscription->update([
-                'ends_at' => $this->calculateEndDate($newPlan, $subscription->starts_at),
-            ]);
-
-            Log::info('Subscription plan changed', [
-                'subscription_id' => $subscription->id,
-                'old_plan_id' => $oldPlanId,
-                'new_plan_id' => $newPlan->id,
-            ]);
-        });
-
-        return $subscription->fresh();
-    }
-
-    /**
-     * Calculate subscription end date based on plan billing cycle.
-     */
-    public function calculateEndDate(Plan $plan, DateTime $startDate): DateTime
-    {
-        return match ($plan->billing_cycle) {
-            'quarterly' => Carbon::parse($startDate)->addMonths(3),
-            'yearly' => Carbon::parse($startDate)->addYear(),
-            default => Carbon::parse($startDate)->addMonth(),
-        };
-    }
-
-    /**
-     * Renew an expired subscription.
-     */
-    public function renewSubscription(Subscription $subscription): Subscription
-    {
-        if (!$subscription->isExpired()) {
-            throw new InvalidArgumentException('Only expired subscriptions can be renewed');
-        }
-
-        DB::transaction(function () use ($subscription) {
-            $plan = $subscription->plan;
-            $startDate = Carbon::now();
-            $endDate = $this->calculateEndDate($plan, $startDate);
-
-            $subscription->update([
-                'status' => 'active',
-                'starts_at' => $startDate,
-                'ends_at' => $endDate,
-                'trial_ends_at' => null,
-                'cancelled_at' => null,
-            ]);
-
-            Log::info('Subscription renewed', [
-                'subscription_id' => $subscription->id,
-                'user_id' => $subscription->user_id,
-            ]);
-        });
-
-        return $subscription->fresh();
-    }
-
-    /**
-     * Get user's active subscription.
-     */
-    public function getActiveSubscription(User $user): ?Subscription
-    {
-        return $user->activeSubscription()->first();
-    }
-
-    /**
-     * Get all user subscriptions.
-     */
-    public function getUserSubscriptions(User $user): Collection
-    {
-        return $user->subscriptions()->with(['plan', 'store'])->latest()->get();
-    }
-
-    /**
-     * Create a new subscription with automatic setup for new users.
-     * @throws Throwable
+     * Create a subscription for a brand-new user on the default plan, which
+     * starts their trial period.
+     *
+     * @throws \RuntimeException when no default plan is configured
      */
     public function createSubscriptionWithAutoSetup(User $user, ?Store $store = null): Subscription
     {
         $defaultPlan = $this->getDefaultPlan();
 
-        if (!$defaultPlan) {
-            return response()->json(['message' => 'No default plan available'], 404);
+        if (! $defaultPlan) {
+            throw new \RuntimeException('No default plan is configured. Seed the database first.');
         }
 
-        // Create subscription with trial
-        $subscription = $this->createSubscription(
-            $user,
-            $defaultPlan,
-            $store,
-            [
-                'trial_days' => $defaultPlan->trial_days,
-                'starts_at' => now(),
-            ]
-        );
-
-        $this->assignDefaultRoleAndPermissions($user, $defaultPlan);
+        $subscription = $this->createSubscription($user, $defaultPlan, $store, [
+            'starts_at' => now(),
+        ]);
 
         Log::info('Auto subscription created for new user', [
             'user_id' => $user->id,
@@ -189,30 +53,32 @@ class SubscriptionService implements SubscriptionServiceInterface
 
     public function getDefaultPlan(): ?Plan
     {
-        return Plan::default()->active()->first();
+        return Plan::query()->default()->active()->first();
     }
 
     /**
-     * Create a new subscription.
-     * @throws Throwable
+     * Create a new subscription, starting a trial if the plan has one, and
+     * materialise the plan's permissions for the user.
+     *
+     * @throws InvalidArgumentException when the user cannot subscribe
      */
     public function createSubscription(User $user, Plan $plan, ?Store $store = null, array $data = []): Subscription
     {
-        if (!$this->canSubscribe($user, $plan)) {
+        if (! $this->canSubscribe($user, $plan)) {
             throw new InvalidArgumentException('User cannot subscribe to this plan');
         }
 
         $startDate = Carbon::parse($data['starts_at'] ?? now());
-        $trialDays = $data['trial_days'] ?? $plan->trial_days ?? 0;
+        $trialDays = (int) ($data['trial_days'] ?? $plan->trial_days ?? 0);
         $trialEndsAt = $trialDays > 0 ? $startDate->copy()->addDays($trialDays) : null;
-        $endsAt = $trialDays > 0 ? null : $this->calculateEndDate($plan, $startDate);
+        $endsAt = $trialEndsAt ? null : $this->calculateEndDate($plan, $startDate);
 
         return DB::transaction(function () use ($user, $plan, $store, $data, $startDate, $trialEndsAt, $endsAt) {
             $subscription = Subscription::query()->create([
                 'user_id' => $user->id,
                 'plan_id' => $plan->id,
                 'store_id' => $store?->id,
-                'status' => $trialEndsAt ? 'trialing' : 'active',
+                'status' => $trialEndsAt ? SubscriptionStatus::TRIALING->value : SubscriptionStatus::ACTIVE->value,
                 'starts_at' => $startDate,
                 'ends_at' => $endsAt,
                 'trial_ends_at' => $trialEndsAt,
@@ -221,10 +87,16 @@ class SubscriptionService implements SubscriptionServiceInterface
                 'metadata' => $data['metadata'] ?? [],
             ]);
 
-            // If subscription is for a store, update the store's plan
             if ($store) {
                 $store->update(['plan_id' => $plan->id]);
+                $this->storeOnboarding->assignPlanPermissionsToOwner($store);
             }
+
+            $this->permissionSync->syncGlobalPlanPermissions(
+                $user,
+                $plan,
+                $trialEndsAt !== null
+            );
 
             Log::info('Subscription created', [
                 'subscription_id' => $subscription->id,
@@ -237,12 +109,168 @@ class SubscriptionService implements SubscriptionServiceInterface
         });
     }
 
+    public function cancelSubscription(Subscription $subscription): Subscription
+    {
+        if (! $subscription->isActive() && ! $subscription->isOnTrial()) {
+            throw new InvalidArgumentException('Only active or trialing subscriptions can be cancelled');
+        }
+
+        DB::transaction(function () use ($subscription) {
+            $subscription->cancel();
+
+            // Tear down plan-derived access: global permissions and, for the
+            // owner, store-scoped roles/permissions across owned stores.
+            $this->permissionSync->revokeGlobalPlanPermissions($subscription->user);
+
+            foreach ($subscription->user->ownedStores as $store) {
+                $this->permissionSync->revokeStoreAccess($subscription->user, $store->id);
+            }
+
+            Log::info('Subscription cancelled', [
+                'subscription_id' => $subscription->id,
+                'user_id' => $subscription->user_id,
+            ]);
+        });
+
+        return $subscription->fresh();
+    }
+
+    public function resumeSubscription(Subscription $subscription): Subscription
+    {
+        if (! $subscription->isCancelled()) {
+            throw new InvalidArgumentException('Only cancelled subscriptions can be resumed');
+        }
+
+        DB::transaction(function () use ($subscription) {
+            $subscription->resume();
+
+            $this->restorePlanAccess($subscription);
+
+            Log::info('Subscription resumed', [
+                'subscription_id' => $subscription->id,
+                'user_id' => $subscription->user_id,
+            ]);
+        });
+
+        return $subscription->fresh();
+    }
+
+    public function changePlan(Subscription $subscription, Plan $newPlan): Subscription
+    {
+        if (! $subscription->isCurrent()) {
+            throw new InvalidArgumentException('Only current subscriptions can change plans');
+        }
+
+        if ($subscription->plan_id === $newPlan->id) {
+            return $subscription;
+        }
+
+        DB::transaction(function () use ($subscription, $newPlan) {
+            $oldPlanId = $subscription->plan_id;
+            $subscription->update([
+                'plan_id' => $newPlan->id,
+                'ends_at' => $this->calculateEndDate($newPlan, $subscription->starts_at ?? now()),
+            ]);
+
+            if ($subscription->store) {
+                $subscription->store->update(['plan_id' => $newPlan->id]);
+            }
+
+            // Re-derive permissions from the new plan.
+            $this->permissionSync->syncGlobalPlanPermissions(
+                $subscription->user,
+                $newPlan,
+                $subscription->isOnTrial()
+            );
+
+            // The account plan governs every store the user owns; mirror it.
+            foreach ($subscription->user->ownedStores as $store) {
+                $store->update(['plan_id' => $newPlan->id]);
+                $this->storeOnboarding->assignPlanPermissionsToOwner($store);
+            }
+
+            Log::info('Subscription plan changed', [
+                'subscription_id' => $subscription->id,
+                'old_plan_id' => $oldPlanId,
+                'new_plan_id' => $newPlan->id,
+            ]);
+        });
+
+        return $subscription->fresh();
+    }
+
+    public function calculateEndDate(Plan $plan, DateTime $startDate): DateTime
+    {
+        $cycle = BillingCycle::tryFrom($plan->billing_cycle) ?? BillingCycle::MONTHLY;
+
+        return Carbon::parse($startDate)->addMonths($cycle->months());
+    }
+
+    public function renewSubscription(Subscription $subscription): Subscription
+    {
+        if (! $subscription->isExpired()) {
+            throw new InvalidArgumentException('Only expired subscriptions can be renewed');
+        }
+
+        DB::transaction(function () use ($subscription) {
+            $plan = $subscription->plan;
+            $startDate = Carbon::now();
+
+            $subscription->update([
+                'status' => SubscriptionStatus::ACTIVE->value,
+                'starts_at' => $startDate,
+                'ends_at' => $this->calculateEndDate($plan, $startDate),
+                'trial_ends_at' => null,
+                'cancelled_at' => null,
+            ]);
+
+            $this->restorePlanAccess($subscription);
+
+            Log::info('Subscription renewed', [
+                'subscription_id' => $subscription->id,
+                'user_id' => $subscription->user_id,
+            ]);
+        });
+
+        return $subscription->fresh();
+    }
+
     /**
-     * Validate if user can subscribe to plan.
+     * Mark a subscription expired and revoke its access grants.
      */
+    public function expireSubscription(Subscription $subscription): Subscription
+    {
+        DB::transaction(function () use ($subscription) {
+            $subscription->update(['status' => SubscriptionStatus::EXPIRED->value]);
+
+            $this->permissionSync->revokeGlobalPlanPermissions($subscription->user);
+
+            foreach ($subscription->user->ownedStores as $store) {
+                $this->permissionSync->revokeStoreAccess($subscription->user, $store->id);
+            }
+
+            Log::info('Subscription expired', [
+                'subscription_id' => $subscription->id,
+                'user_id' => $subscription->user_id,
+            ]);
+        });
+
+        return $subscription->fresh();
+    }
+
+    public function getActiveSubscription(User $user): ?Subscription
+    {
+        return $user->activeSubscription()->first();
+    }
+
+    public function getUserSubscriptions(User $user): Collection
+    {
+        return $user->subscriptions()->with(['plan', 'store'])->latest()->get();
+    }
+
     public function canSubscribe(User $user, Plan $plan): bool
     {
-        if (!$plan->is_active) {
+        if (! $plan->isActive()) {
             return false;
         }
 
@@ -252,6 +280,7 @@ class SubscriptionService implements SubscriptionServiceInterface
 
         if ($plan->max_stores > 0) {
             $currentStoreCount = $user->ownedStores()->count();
+
             if ($currentStoreCount >= $plan->max_stores) {
                 return false;
             }
@@ -260,41 +289,25 @@ class SubscriptionService implements SubscriptionServiceInterface
         return true;
     }
 
-    /**
-     * Check if user has active subscription.
-     */
     public function hasActiveSubscription(User $user): bool
     {
         return $user->activeSubscription()->exists();
     }
 
     /**
-     * Assign default role and permissions to user.
+     * Re-grant the access a subscription provides (global permissions + owner
+     * store grants). Used by resume/renew.
      */
-    protected function assignDefaultRoleAndPermissions(User $user, Plan $plan): void
+    protected function restorePlanAccess(Subscription $subscription): void
     {
-        // Assign owner role at user level
-        $ownerRole = Role::where('key', 'owner')->first();
-        if ($ownerRole) {
-            $user->assignRole($ownerRole);
+        $this->permissionSync->syncGlobalPlanPermissions(
+            $subscription->user,
+            $subscription->plan,
+            $subscription->isOnTrial()
+        );
+
+        foreach ($subscription->user->ownedStores as $store) {
+            $this->storeOnboarding->assignPlanPermissionsToOwner($store);
         }
-
-        // Assign plan-based permissions at user level
-        $plan->load('features');
-        $permissions = $plan->features->map(function ($feature) {
-            return $feature->getPermission();
-        })->filter();
-
-        $permissionIds = $permissions->pluck('id')->toArray();
-
-        if (count($permissionIds) > 0) {
-            $user->permissions()->syncWithoutDetaching($permissionIds);
-        }
-
-        Log::info('Default role and permissions assigned to user', [
-            'user_id' => $user->id,
-            'plan_id' => $plan->id,
-            'permissions_count' => count($permissionIds),
-        ]);
     }
 }

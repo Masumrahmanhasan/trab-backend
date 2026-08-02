@@ -28,8 +28,8 @@ class PermissionResource extends JsonResource
                 'updatedAt' => $this->resource->updated_at,
             ],
             'links' => [
-                ['self' => route('permissions.show', $this->resource->id)]
-            ]
+                ['self' => route('permissions.show', $this->resource->id)],
+            ],
         ];
     }
 }

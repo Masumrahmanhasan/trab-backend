@@ -15,6 +15,7 @@ class UserProfileController extends Controller
     {
         $user = $request->user();
         $user->load('roles', 'permissions');
+
         return $this->ok('User profile', new UserResource($user));
     }
 }

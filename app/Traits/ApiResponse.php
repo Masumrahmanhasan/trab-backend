@@ -17,7 +17,7 @@ trait ApiResponse
             'message' => $message,
             'status' => $statusCode,
             'data' => $data,
-        ]);
+        ], $statusCode);
     }
 
     protected function forbidden($message = 'Forbidden'): JsonResponse

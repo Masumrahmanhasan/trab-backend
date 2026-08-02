@@ -17,10 +17,12 @@ return new class extends Migration {
             $table->string('name');
             $table->string('slug')->unique();
             $table->text('description')->nullable();
-            $table->decimal('price', 10, 2);
+            $table->decimal('price', 10, 2)->default(0);
             $table->enum('billing_cycle', BillingCycle::cases())->default(BillingCycle::MONTHLY->value);
             $table->enum('status', PlansStatus::cases())->default(PlansStatus::DRAFT->value);
             $table->integer('trial_days')->default(0);
+            $table->integer('max_stores')->default(1);
+            $table->integer('max_staff_per_store')->default(0);
             $table->boolean('is_default')->default(false);
             $table->timestamps();
         });

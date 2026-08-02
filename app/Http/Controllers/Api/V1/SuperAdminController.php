@@ -48,7 +48,9 @@ class SuperAdminController extends Controller
             'total_subscriptions' => Subscription::count(),
             'active_subscriptions' => Subscription::where('status', 'active')->count(),
             'trial_subscriptions' => Subscription::where('status', 'trialing')->count(),
-            'total_revenue' => Subscription::where('status', 'active')->sum('plan.price'),
+            'total_revenue' => Subscription::where('subscriptions.status', 'active')
+                ->join('plans', 'plans.id', '=', 'subscriptions.plan_id')
+                ->sum('plans.price'),
             'plans_count' => Plan::count(),
             'roles_count' => Role::count(),
             'permissions_count' => Permission::count(),

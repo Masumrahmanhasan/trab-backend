@@ -26,11 +26,11 @@ class UserResource extends JsonResource
                 'email' => $this->resource->email,
                 'emailVerifiedAt' => $this->resource->email_verified_at,
                 'createdAt' => $this->resource->created_at,
-                'updatedAt' => $this->resource->updated_at
+                'updatedAt' => $this->resource->updated_at,
             ],
             'links' => [
-                ['self' => route('users.show', $this->resource->id)]
-            ]
+                ['self' => route('users.show', $this->resource->id)],
+            ],
         ];
     }
 }

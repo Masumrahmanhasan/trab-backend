@@ -33,7 +33,7 @@ class LoginController extends Controller
 
         $user = $this->authService->authenticate($validated['email'], $validated['password']);
 
-        if (!$user) {
+        if (! $user) {
             RateLimiter::hit($key);
             throw ValidationException::withMessages([
                 'email' => __('auth.failed'),
@@ -51,7 +51,7 @@ class LoginController extends Controller
 
     protected function throttleKey(Request $request): string
     {
-        return Str::lower($request->input('email')) . '|' . $request->ip();
+        return Str::lower($request->input('email')).'|'.$request->ip();
     }
 
     protected function checkRateLimit(string $key): void
@@ -78,11 +78,11 @@ class LoginController extends Controller
     {
         $user = User::find($id);
 
-        if (!$user) {
+        if (! $user) {
             return $this->notFound('User not found');
         }
 
-        if (!hash_equals(sha1($user->getEmailForVerification()), $hash)) {
+        if (! hash_equals(sha1($user->getEmailForVerification()), $hash)) {
             return $this->forbidden('Invalid verification link');
         }
 

@@ -3,13 +3,19 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class AssignStaffRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user() && $this->store->owner_id === $this->user()->id;
+        $user = $this->user();
+        $store = $this->route('store');
+
+        if (! $user || ! $store) {
+            return false;
+        }
+
+        return $user->id === $store->owner_id || $user->hasRole('super-admin');
     }
 
     public function rules(): array

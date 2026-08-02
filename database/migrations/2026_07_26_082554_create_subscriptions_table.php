@@ -16,7 +16,7 @@ return new class extends Migration {
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->foreignId('plan_id')->constrained()->onDelete('cascade');
             $table->foreignId('store_id')->nullable()->constrained()->onDelete('cascade');
-            $table->enum('status', SubscriptionStatus::cases())->default(SubscriptionStatus::ACTIVE->value);
+            $table->enum('status', SubscriptionStatus::cases())->default(SubscriptionStatus::PENDING->value);
             $table->timestamp('starts_at')->nullable();
             $table->timestamp('ends_at')->nullable();
             $table->timestamp('trial_ends_at')->nullable();

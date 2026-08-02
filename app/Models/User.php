@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\Roles;
 use App\Models\Concerns\HasPermissions;
 use App\Models\Concerns\HasRoles;
 use App\Services\ActivityLogger;
@@ -25,8 +26,8 @@ use Laravel\Sanctum\HasApiTokens;
  * @property-read string $email
  * @property-read string $password
  *
- * @method static inStore(int $storeId)
- * @method static withRoleInStore(string|Role $role, int $storeId)
+ * @method static Builder inStore(int $storeId)
+ * @method static Builder withRoleInStore(string|Role $role, int $storeId)
  */
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
@@ -50,12 +51,20 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Subscription::class);
     }
 
+    /**
+     * Every store the user owns OR holds a store-scoped role in.
+     */
     public function getStores(): Collection
     {
-        $teamIds = $this->roles()->pluck('team_id')->filter()->unique();
+        $teamIds = $this->roles()
+            ->withPivot('team_id')
+            ->get()
+            ->pluck('pivot.team_id')
+            ->filter()
+            ->unique();
 
         return Store::query()
-            ->where(function ($query) use ($teamIds) {
+            ->where(function (Builder $query) use ($teamIds) {
                 $query->whereIn('id', $teamIds)
                     ->orWhere('owner_id', $this->id);
             })
@@ -72,10 +81,18 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasOne(Subscription::class)->current();
     }
 
+    /**
+     * Stores this user owns.
+     */
+    public function ownedStoreIds(): Collection
+    {
+        return $this->ownedStores()->pluck('id');
+    }
+
     #[Scope]
     protected function inStore(Builder $query, int $storeId): void
     {
-        $query->whereHas('roles', function ($q) use ($storeId) {
+        $query->whereHas('roles', function (Builder $q) use ($storeId) {
             $q->wherePivot('team_id', $storeId);
         });
     }
@@ -83,7 +100,7 @@ class User extends Authenticatable implements MustVerifyEmail
     #[Scope]
     protected function withRoleInStore(Builder $query, string|Role $role, int $storeId): void
     {
-        $query->whereHas('roles', function ($q) use ($role, $storeId) {
+        $query->whereHas('roles', function (Builder $q) use ($role, $storeId) {
             $q->where('key', is_string($role) ? $role : $role->key)
                 ->wherePivot('team_id', $storeId);
         });
@@ -100,6 +117,22 @@ class User extends Authenticatable implements MustVerifyEmail
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * Every newly created user gets the basic platform "user" role, no matter
+     * which flow created them (registration, factory, admin panel, seeder).
+     *
+     * The existence guard keeps user creation safe before roles have been
+     * seeded (e.g. isolated unit tests).
+     */
+    protected static function booted(): void
+    {
+        static::created(function (User $user) {
+            if (Role::query()->where('key', Roles::USER->value)->exists()) {
+                $user->assignRole(Roles::USER->value);
+            }
+        });
     }
 
     /**

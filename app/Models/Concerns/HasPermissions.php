@@ -109,7 +109,7 @@ trait HasPermissions
 
     public function hasAnyPermissions(array $permissions, ?int $teamId = null): bool
     {
-        return collect($permissions)->some(fn($permission) => $this->hasPermissionTo($permission, $teamId));
+        return collect($permissions)->some(fn ($permission) => $this->hasPermissionTo($permission, $teamId));
     }
 
     public function hasPermissionTo(string|Permission $permission, ?int $teamId = null): bool
@@ -121,6 +121,10 @@ trait HasPermissions
 
         if ($teamId !== null) {
             $permissionsQuery->wherePivot('team_id', $teamId);
+        } else {
+            // Without a team context only global (platform) grants count;
+            // store-scoped grants require an explicit store context.
+            $permissionsQuery->wherePivot('team_id', null);
         }
 
         if ($permissionsQuery->get()->contains('key', $key)) {
@@ -132,6 +136,8 @@ trait HasPermissions
 
             if ($teamId !== null) {
                 $rolesQuery->wherePivot('team_id', $teamId);
+            } else {
+                $rolesQuery->wherePivot('team_id', null);
             }
 
             return $rolesQuery->with('permissions')

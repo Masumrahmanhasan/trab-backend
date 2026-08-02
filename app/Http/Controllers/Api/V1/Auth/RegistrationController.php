@@ -35,7 +35,8 @@ class RegistrationController extends Controller
         $user = $this->authService->registerWithSubscription($validated);
 
         RateLimiter::clear($key);
-        $token = $this->authService->generateToken($user, config('app.name') . '-token');
+        $token = $this->authService->generateToken($user, config('app.name').'-token');
+
         return $this->ok(__('messages.login'), [
             'token' => $token,
         ]);
@@ -43,7 +44,7 @@ class RegistrationController extends Controller
 
     protected function throttleKey(Request $request): string
     {
-        return 'register|' . $request->ip() . '|' . $request->method();
+        return 'register|'.$request->ip().'|'.$request->method();
     }
 
     protected function checkRateLimit(string $key): void
@@ -51,7 +52,7 @@ class RegistrationController extends Controller
         if (RateLimiter::tooManyAttempts($key, 5)) {
             $seconds = RateLimiter::availableIn($key);
 
-            throw ValidationException::withMessages(['email' => sprintf("Too many Registration attempts. Please try again in %s seconds.", $seconds)]);
+            throw ValidationException::withMessages(['email' => sprintf('Too many Registration attempts. Please try again in %s seconds.', $seconds)]);
         }
     }
 }

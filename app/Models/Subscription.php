@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\SubscriptionStatus;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
@@ -14,7 +15,7 @@ use Illuminate\Support\Carbon;
  * @property-read int $id
  * @property-read int $user_id
  * @property-read int $plan_id
- * @property-read int $store_id
+ * @property-read int|null $store_id
  * @property-read string $status
  * @property-read Carbon|null $starts_at
  * @property-read Carbon|null $ends_at
@@ -38,7 +39,7 @@ use Illuminate\Support\Carbon;
  * @method static Builder|Subscription forUser(int $userId)
  * @method static Builder|Subscription forStore(int $storeId)
  */
-#[Fillable(['user_id', 'plan_id', 'store_id', 'status', 'starts_at', 'ends_at', 'trial_ends_at', 'cancelled_at', 'payment_method', 'payment_gateway_id', 'metadata',])]
+#[Fillable(['user_id', 'plan_id', 'store_id', 'status', 'starts_at', 'ends_at', 'trial_ends_at', 'cancelled_at', 'payment_method', 'payment_gateway_id', 'metadata'])]
 class Subscription extends Model
 {
     use SoftDeletes;
@@ -67,61 +68,71 @@ class Subscription extends Model
         return $this->belongsTo(Store::class);
     }
 
+    /**
+     * Whether this subscription currently grants access (active or on trial).
+     */
     public function isCurrent(): bool
     {
         return $this->isActive() || $this->isOnTrial();
     }
 
+    /**
+     * Whether this subscription is in a paid, active period right now.
+     */
     public function isActive(): bool
     {
-        return $this->active() &&
-            $this->starts_at &&
-            $this->starts_at->isPast() &&
-            ($this->ends_at === null || $this->ends_at->isFuture());
+        return $this->status === SubscriptionStatus::ACTIVE->value
+            && $this->starts_at !== null
+            && $this->starts_at->isPast()
+            && ($this->ends_at === null || $this->ends_at->isFuture());
     }
 
     #[Scope]
     protected function active(Builder $query): void
     {
-        $query->where('status', 'active')
+        $query->where('status', SubscriptionStatus::ACTIVE->value)
             ->where('starts_at', '<=', now())
-            ->where(function ($query) {
+            ->where(function (Builder $query) {
                 $query->whereNull('ends_at')
                     ->orWhere('ends_at', '>', now());
             });
     }
 
+    /**
+     * Whether this subscription is inside its trial window right now.
+     */
     public function isOnTrial(): bool
     {
-        return $this->status === 'trialing' &&
-            $this->trial_ends_at &&
-            $this->trial_ends_at->isFuture();
+        return $this->status === SubscriptionStatus::TRIALING->value
+            && $this->trial_ends_at !== null
+            && $this->trial_ends_at->isFuture();
     }
 
     public function isCancelled(): bool
     {
-        return $this->status === 'cancelled';
+        return $this->status === SubscriptionStatus::CANCELLED->value;
     }
 
     public function isExpired(): bool
     {
-        return $this->expired() || ($this->ends_at && $this->ends_at->isPast());
+        return $this->status === SubscriptionStatus::EXPIRED->value
+            || ($this->ends_at !== null && $this->ends_at->isPast());
     }
 
     #[Scope]
     protected function expired(Builder $query): void
     {
-        $query->where('status', 'expired')
-            ->orWhere(function ($query) {
-                $query->where('ends_at', '<', now())
-                    ->whereNotNull('ends_at');
+        $query->where('status', SubscriptionStatus::EXPIRED->value)
+            ->orWhere(function (Builder $query) {
+                $query->whereNotNull('ends_at')
+                    ->where('ends_at', '<', now());
             });
     }
 
     public function cancel(): void
     {
         $this->update([
-            'status' => 'cancelled',
+            'status' => SubscriptionStatus::CANCELLED->value,
             'cancelled_at' => now(),
         ]);
     }
@@ -129,7 +140,7 @@ class Subscription extends Model
     public function resume(): void
     {
         $this->update([
-            'status' => 'active',
+            'status' => SubscriptionStatus::ACTIVE->value,
             'cancelled_at' => null,
         ]);
     }
@@ -143,13 +154,13 @@ class Subscription extends Model
     #[Scope]
     protected function cancelled(Builder $query): void
     {
-        $query->where('status', 'cancelled');
+        $query->where('status', SubscriptionStatus::CANCELLED->value);
     }
 
     #[Scope]
     protected function trialing(Builder $query): void
     {
-        $query->where('status', 'trialing')
+        $query->where('status', SubscriptionStatus::TRIALING->value)
             ->where('trial_ends_at', '>', now());
     }
 
@@ -162,9 +173,9 @@ class Subscription extends Model
     #[Scope]
     protected function current(Builder $query): void
     {
-        $query->where(function ($query) {
-            $query->active()->orWhere(function ($query) {
-                $query->where('status', 'trialing')
+        $query->where(function (Builder $query) {
+            $query->active()->orWhere(function (Builder $query) {
+                $query->where('status', SubscriptionStatus::TRIALING->value)
                     ->where('trial_ends_at', '>', now());
             });
         });

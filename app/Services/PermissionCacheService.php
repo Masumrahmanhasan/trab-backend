@@ -2,8 +2,10 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\Cache;
+use App\Models\Role;
+use App\Models\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 
 class PermissionCacheService
 {
@@ -14,8 +16,8 @@ class PermissionCacheService
         $cacheKey = $this->getUserPermissionsCacheKey($userId, $teamId);
 
         return Cache::remember($cacheKey, $this->cacheTtl, function () use ($userId, $teamId) {
-            $user = \App\Models\User::find($userId);
-            if (!$user) {
+            $user = User::find($userId);
+            if (! $user) {
                 return collect();
             }
 
@@ -28,8 +30,8 @@ class PermissionCacheService
         $cacheKey = $this->getUserRolesCacheKey($userId, $teamId);
 
         return Cache::remember($cacheKey, $this->cacheTtl, function () use ($userId, $teamId) {
-            $user = \App\Models\User::find($userId);
-            if (!$user) {
+            $user = User::find($userId);
+            if (! $user) {
                 return collect();
             }
 
@@ -42,8 +44,8 @@ class PermissionCacheService
         $cacheKey = $this->getRolePermissionsCacheKey($roleId);
 
         return Cache::remember($cacheKey, $this->cacheTtl, function () use ($roleId) {
-            $role = \App\Models\Role::find($roleId);
-            if (!$role) {
+            $role = Role::find($roleId);
+            if (! $role) {
                 return collect();
             }
 
@@ -65,7 +67,7 @@ class PermissionCacheService
     public function clearAllUserCache(int $userId): void
     {
         // Clear all team-specific caches for user
-        $user = \App\Models\User::find($userId);
+        $user = User::find($userId);
         if ($user) {
             $teamIds = $user->roles()->pluck('team_id')->filter()->unique();
             foreach ($teamIds as $teamId) {
@@ -79,12 +81,12 @@ class PermissionCacheService
 
     protected function getUserPermissionsCacheKey(int $userId, ?int $teamId = null): string
     {
-        return "user_permissions:{$userId}" . ($teamId ? ":team:{$teamId}" : ":global");
+        return "user_permissions:{$userId}".($teamId ? ":team:{$teamId}" : ':global');
     }
 
     protected function getUserRolesCacheKey(int $userId, ?int $teamId = null): string
     {
-        return "user_roles:{$userId}" . ($teamId ? ":team:{$teamId}" : ":global");
+        return "user_roles:{$userId}".($teamId ? ":team:{$teamId}" : ':global');
     }
 
     protected function getRolePermissionsCacheKey(int $roleId): string

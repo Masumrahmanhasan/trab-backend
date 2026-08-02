@@ -29,10 +29,6 @@ class SubscriptionController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        if (! $request->user()) {
-            return $this->forbidden('Authentication required');
-        }
-
         $subscriptions = $this->subscriptionService->getUserSubscriptions($request->user());
 
         return $this->ok('Subscriptions retrieved successfully', SubscriptionResource::collection($subscriptions));
@@ -43,10 +39,6 @@ class SubscriptionController extends Controller
      */
     public function active(Request $request): JsonResponse
     {
-        if (! $request->user()) {
-            return $this->forbidden('Authentication required');
-        }
-
         $activeSubscription = $this->subscriptionService->getActiveSubscription($request->user());
 
         if (! $activeSubscription) {
@@ -82,15 +74,9 @@ class SubscriptionController extends Controller
     /**
      * Display the specified subscription.
      */
-    public function show(Request $request, string $id): JsonResponse
+    public function show(Request $request, Subscription $subscription): JsonResponse
     {
-        if (! $request->user()) {
-            return $this->forbidden('Authentication required');
-        }
-
-        $subscription = Subscription::findOrFail($id);
-
-        if ($subscription->user_id !== $request->user()->id) {
+        if ($subscription->user_id !== $request->user()->id && ! $request->user()->hasRole('super-admin')) {
             return $this->forbidden('You do not have access to this subscription');
         }
 
@@ -100,15 +86,9 @@ class SubscriptionController extends Controller
     /**
      * Cancel the specified subscription.
      */
-    public function cancel(Request $request, string $id): JsonResponse
+    public function cancel(Request $request, Subscription $subscription): JsonResponse
     {
-        if (! $request->user()) {
-            return $this->forbidden('Authentication required');
-        }
-
-        $subscription = Subscription::findOrFail($id);
-
-        if ($subscription->user_id !== $request->user()->id) {
+        if ($subscription->user_id !== $request->user()->id && ! $request->user()->hasRole('super-admin')) {
             return $this->forbidden('You do not have permission to cancel this subscription');
         }
 
@@ -120,15 +100,9 @@ class SubscriptionController extends Controller
     /**
      * Resume the specified subscription.
      */
-    public function resume(Request $request, string $id): JsonResponse
+    public function resume(Request $request, Subscription $subscription): JsonResponse
     {
-        if (! $request->user()) {
-            return $this->forbidden('Authentication required');
-        }
-
-        $subscription = Subscription::findOrFail($id);
-
-        if ($subscription->user_id !== $request->user()->id) {
+        if ($subscription->user_id !== $request->user()->id && ! $request->user()->hasRole('super-admin')) {
             return $this->forbidden('You do not have permission to resume this subscription');
         }
 
@@ -140,15 +114,9 @@ class SubscriptionController extends Controller
     /**
      * Change the subscription plan.
      */
-    public function changePlan(SubscriptionUpdateRequest $request, string $id): JsonResponse
+    public function changePlan(SubscriptionUpdateRequest $request, Subscription $subscription): JsonResponse
     {
-        if (! $request->user()) {
-            return $this->forbidden('Authentication required');
-        }
-
-        $subscription = Subscription::findOrFail($id);
-
-        if ($subscription->user_id !== $request->user()->id) {
+        if ($subscription->user_id !== $request->user()->id && ! $request->user()->hasRole('super-admin')) {
             return $this->forbidden('You do not have permission to change this subscription');
         }
 
@@ -163,15 +131,9 @@ class SubscriptionController extends Controller
     /**
      * Renew an expired subscription.
      */
-    public function renew(Request $request, string $id): JsonResponse
+    public function renew(Request $request, Subscription $subscription): JsonResponse
     {
-        if (! $request->user()) {
-            return $this->forbidden('Authentication required');
-        }
-
-        $subscription = Subscription::findOrFail($id);
-
-        if ($subscription->user_id !== $request->user()->id) {
+        if ($subscription->user_id !== $request->user()->id && ! $request->user()->hasRole('super-admin')) {
             return $this->forbidden('You do not have permission to renew this subscription');
         }
 
